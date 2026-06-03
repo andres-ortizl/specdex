@@ -98,6 +98,10 @@
 
 * { box-sizing: border-box; }
 
+/* the `hidden` attribute must win over component `display` rules (.fleet=grid,
+   .detail=flex) so showView() can actually hide a pane. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
