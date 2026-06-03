@@ -126,7 +126,7 @@ consequential SendMessage between agents also records one.** Fire-and-forget —
 
 | When | Command |
 |---|---|
-| Setup — worktree registered | `dex init --branch spec/<spec-name> --worktree <path>` |
+| Setup — worktree registered | `dex init --branch specdex-<spec-name> --worktree <path>` |
 | Setup — ports (if `[ports]` configured) | `eval "$(dex ports alloc)"` — allocates a free offset + exports the port env vars |
 | Plan | `dex phase plan` |
 | Implement starts | `dex phase build` |
@@ -154,18 +154,22 @@ are roles, not vendors (the config says which tool fills each).
 Writes/updates this project's `.dex.toml` by exploring the repo and asking only what
 can't be inferred. The CLI is the typed brain; you supply the judgement.
 
-1. **Read the option space:** `dex config schema` — the valid providers per role, hook
-   points, phases, and the `[ports]`/authoring shape. This is your map; don't invent keys.
-2. **Explore the repo to infer:**
+1. **Scaffold the file deterministically:** `dex config init` writes a commented
+   `.dex.toml` template at the repo root (use `--force` to overwrite an existing one).
+   You then EDIT it — don't hand-author from scratch.
+2. **Read the option space:** `dex config schema` — valid providers per role, hook
+   points, phases, models, the `[ports]` shape. Your map; don't invent keys.
+3. **Explore the repo to infer:**
    - `docker-compose.y*ml` / `Dockerfile` + a frontend (`vite`/`next`) ⇒ `[[ports]]` entries (infer service names, bases, env vars from the compose file) and `ci` likely needed.
    - `.github/workflows/*` ⇒ `ci = "github-actions"`.
    - `Cargo.toml` / a single binary / a library ⇒ no `[ports]`, often `ci`/`pr_review = "none"`.
    - existing PR-bot config (`.greptile`, coderabbit yaml) ⇒ the matching `pr_review`.
-3. **Ask only the ambiguous** (`AskUserQuestion`): which `notifier` (slack/discord/none),
-   which `vault` (work/personal/…), and confirm inferred `[ports]`. Don't ask what you inferred with confidence.
-4. **Write `.dex.toml`** at the repo root (with `vault = "<name>"` if chosen).
-5. **Validate:** `dex config validate`. On error, fix and re-validate until it passes.
-6. Show the user the final `.dex.toml` + `dex config show`.
+4. **Ask only the ambiguous** (`AskUserQuestion`): which `notifier` (slack/discord/none)
+   and confirm inferred `[ports]`. Don't ask what you inferred with confidence. (Global
+   defaults like notifier/identity can live in `~/.config/dex/config.toml` instead.)
+5. **Edit `.dex.toml`** with the inferred/answered values (Edit the scaffolded file).
+6. **Validate:** `dex config validate`. On error, fix and re-validate until it passes.
+7. Show the user the final `.dex.toml` + `dex config show`. Confirm it was WRITTEN, not just printed.
 
 This mode does NOT run the dev loop — it only produces config. Run `/specdex <feature>` after.
 
@@ -243,10 +247,10 @@ If already in a worktree (e.g., created by Conductor or another tool), **skip wo
 If on the main working tree, create an isolated worktree:
 
 ```
-EnterWorktree(name="spec/<spec-name>")
+EnterWorktree(name="specdex-<spec-name>")
 ```
 
-This creates a new branch and working directory at `.claude/worktrees/spec/<spec-name>`. All implementation happens here — the main working tree is untouched.
+This creates a new branch and working directory at `.claude/worktrees/specdex-<spec-name>`. All implementation happens here — the main working tree is untouched. The **`specdex-` prefix** makes specdex's worktrees identifiable (`git worktree list | grep '/specdex-'`) so cleanup never touches Conductor/other-tool worktrees, and the UI locates a spec's `.dex.toml` via its recorded worktree path.
 
 ### 4. Copy environment
 

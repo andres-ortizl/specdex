@@ -59,6 +59,7 @@ export DEX_SPEC=anyformat-backend/parse-cache   # or pass -s <project>/<name> pe
 
 | Command | Effect |
 |---|---|
+| `dex config init [--force]` | write a commented `.dex.toml` template to the current dir (the deterministic way to create config — edit it after) |
 | `dex config show` | merged effective config as JSON (`defaults ← ~/.config/dex/config.toml ← .dex.toml`) |
 | `dex config get <dotted.key>` | one value — e.g. `providers.notifier`, `providers.pr_review.reactor`, `hooks.on_ship`, `phases_skip`, `models.coder`, `ports`, `identity.github_org` |
 | `dex config validate` | typed validation; warns on referenced reactor/hook skills not in `~/.claude/skills` |

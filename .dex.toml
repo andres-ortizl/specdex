@@ -1,5 +1,3 @@
-vault = "personal"
-
 [providers]
 notifier = "slack"
 ci = "none"

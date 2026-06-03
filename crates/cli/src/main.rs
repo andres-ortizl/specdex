@@ -121,6 +121,12 @@ enum Cmd {
 
 #[derive(Subcommand)]
 enum ConfigOp {
+    /// Write a commented .dex.toml template to the current directory
+    Init {
+        /// Overwrite an existing .dex.toml
+        #[arg(long)]
+        force: bool,
+    },
     /// Print the merged effective config as JSON
     Show,
     /// Print a single dotted key (e.g. providers.notifier, providers.pr_review.reactor)
@@ -207,9 +213,43 @@ fn port_is_free(port: u16) -> bool {
     std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
+const DEX_TOML_TEMPLATE: &str = r#"# .dex.toml — specdex project config. See `dex config schema`.
+[providers]
+notifier  = "none"   # slack | discord | none
+ci        = "none"   # github-actions | none
+pr_review = "none"   # greptile | coderabbit | none
+
+# [[ports]]            # services this project runs locally (a CLI/lib declares none)
+# service = "frontend"
+# base    = 5173
+# env     = "VITE_PORT"
+
+# [phases]
+# skip = ["verify"]    # phases to skip entirely
+
+# [models]             # per-project agent model: opus | sonnet | haiku | inherit
+# coder    = "sonnet"
+# reviewer = "opus"
+
+# [hooks]
+# on_ship = "/pr"
+
+# [identity]
+# github_org = "your-org"
+"#;
+
 fn config_cmd(op: &ConfigOp) -> Result<()> {
     let cwd = std::env::current_dir()?;
     match op {
+        ConfigOp::Init { force } => {
+            let dest = cwd.join(".dex.toml");
+            if dest.exists() && !force {
+                return Err(anyhow!("{} already exists (use --force to overwrite)", dest.display()));
+            }
+            std::fs::write(&dest, DEX_TOML_TEMPLATE)?;
+            println!("wrote {}", dest.display());
+            return Ok(());
+        }
         ConfigOp::Show => {
             let eff = load_effective(&cwd)?;
             println!("{}", serde_json::to_string_pretty(&eff)?);
