@@ -73,6 +73,7 @@ function sampleDetail(project, name) {
       state: {
         project, name, phase: "verify", mode: "autonomous", branch: "verify-flake",
         worktree: "~/code/anyformat-backend.worktrees/verify-flake",
+        session_id: "a1b2c3d4e5f6g7h8",
         offset: 20, ports: { backend: 8020, frontend: 5193, db: 5452 },
         pr: { number: 4012, url: "https://github.com/anyformat-ai/anyformat-backend/pull/4012", state: "open" },
         review_round: 2, review_score: 4,
@@ -87,36 +88,36 @@ function sampleDetail(project, name) {
         last_heartbeat: t(12 * 60_000),
       },
       events: [
-        { type: "spec.created", time: t(95 * 60_000), source: "dex",
+        { type: "spec.created", time: t(95 * 60_000), source: "anyformat-backend/verify-flake", actor: "lead",
           data: { branch: "verify-flake", worktree: "~/code/anyformat-backend.worktrees/verify-flake" } },
-        { type: "ports.assigned", time: t(95 * 60_000), source: "dex",
+        { type: "ports.assigned", time: t(95 * 60_000), source: "anyformat-backend/verify-flake", actor: "lead",
           data: { offset: 20, ports: { backend: 8020, frontend: 5193, db: 5452 } } },
-        { type: "phase.enter", time: t(94 * 60_000), source: "coder", data: { phase: "plan" } },
-        { type: "agent.spawn", time: t(93 * 60_000), source: "dex", data: { role: "coder", agent_id: "c-7a1" } },
-        { type: "phase.enter", time: t(80 * 60_000), source: "coder", data: { phase: "build" } },
-        { type: "heartbeat", time: t(78 * 60_000), source: "coder", data: {} },
-        { type: "heartbeat", time: t(76 * 60_000), source: "coder", data: {} },
-        { type: "heartbeat", time: t(74 * 60_000), source: "coder", data: {} },
-        { type: "test.result", time: t(60 * 60_000), source: "coder",
+        { type: "phase.enter", time: t(94 * 60_000), source: "anyformat-backend/verify-flake", actor: "lead", data: { phase: "plan" } },
+        { type: "agent.spawn", time: t(93 * 60_000), source: "anyformat-backend/verify-flake", actor: "lead", data: { role: "coder", agent_id: "c-7a1" } },
+        { type: "phase.enter", time: t(80 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder", data: { phase: "build" } },
+        { type: "heartbeat", time: t(78 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder", data: {} },
+        { type: "heartbeat", time: t(76 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder", data: {} },
+        { type: "heartbeat", time: t(74 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder", data: {} },
+        { type: "test.result", time: t(60 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder",
           data: { passed: 320, failed: 0, cmd: "pytest -q" } },
-        { type: "phase.enter", time: t(58 * 60_000), source: "coder", data: { phase: "review" } },
-        { type: "agent.spawn", time: t(57 * 60_000), source: "dex", data: { role: "reviewer", agent_id: "r-3c9" } },
-        { type: "review.verdict", time: t(45 * 60_000), source: "reviewer",
+        { type: "phase.enter", time: t(58 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder", data: { phase: "review" } },
+        { type: "agent.spawn", time: t(57 * 60_000), source: "anyformat-backend/verify-flake", actor: "lead", data: { role: "reviewer", agent_id: "r-3c9" } },
+        { type: "review.verdict", time: t(45 * 60_000), source: "anyformat-backend/verify-flake", actor: "reviewer",
           data: { round: 1, verdict: "changes_requested", blockers: 1, issues: 3 } },
-        { type: "note", time: t(44 * 60_000), source: "reviewer",
+        { type: "note", time: t(44 * 60_000), source: "anyformat-backend/verify-flake", actor: "reviewer",
           data: { level: "warn", topic: "perf", text: "N+1 query in the results serializer" } },
-        { type: "phase.enter", time: t(30 * 60_000), source: "coder", data: { phase: "build", reason: "addressing review" } },
-        { type: "review.verdict", time: t(20 * 60_000), source: "reviewer",
+        { type: "phase.enter", time: t(30 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder", data: { phase: "build", reason: "addressing review" } },
+        { type: "review.verdict", time: t(20 * 60_000), source: "anyformat-backend/verify-flake", actor: "reviewer",
           data: { round: 2, verdict: "approved", blockers: 0, issues: 0 } },
-        { type: "agent.idle", time: t(20 * 60_000), source: "reviewer", data: { role: "reviewer" } },
-        { type: "pr.created", time: t(18 * 60_000), source: "dex",
+        { type: "agent.idle", time: t(20 * 60_000), source: "anyformat-backend/verify-flake", actor: "reviewer", data: { role: "reviewer" } },
+        { type: "pr.created", time: t(18 * 60_000), source: "anyformat-backend/verify-flake", actor: "lead",
           data: { number: 4012, url: "https://github.com/anyformat-ai/anyformat-backend/pull/4012" } },
-        { type: "phase.enter", time: t(16 * 60_000), source: "coder", data: { phase: "verify" } },
+        { type: "phase.enter", time: t(16 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder", data: { phase: "verify" } },
         { type: "gate.status", time: t(14 * 60_000), source: "github-actions",
           data: { provider: "github-actions", name: "ci", result: "failure" } },
-        { type: "test.result", time: t(13 * 60_000), source: "coder",
+        { type: "test.result", time: t(13 * 60_000), source: "anyformat-backend/verify-flake", actor: "coder",
           data: { passed: 318, failed: 2, cmd: "pytest -q" } },
-        { type: "spec.blocked", time: t(12 * 60_000), source: "dex",
+        { type: "spec.blocked", time: t(12 * 60_000), source: "anyformat-backend/verify-flake", actor: "lead",
           data: { reason: "infra flake on CI — needs a human re-run" } },
       ],
       doc: "# verify-flake\n\nStabilize the flaky results-serializer test under CI load.\n\n## Acceptance Criteria\n- [ ] test passes 50× in a row locally\n- [ ] no N+1 query in the results serializer\n",
@@ -142,14 +143,14 @@ function sampleDetail(project, name) {
       last_heartbeat: row.updated_at,
     },
     events: [
-      { type: "spec.created", time: ISO(60 * 60_000), source: "dex",
+      { type: "spec.created", time: ISO(60 * 60_000), source: project + "/" + name, actor: "lead",
         data: { branch: name, worktree: "~/code/" + project + ".worktrees/" + name } },
-      { type: "phase.enter", time: ISO(58 * 60_000), source: "coder", data: { phase: "plan" } },
-      { type: "agent.spawn", time: ISO(57 * 60_000), source: "dex", data: { role: "coder" } },
-      { type: "phase.enter", time: ISO(40 * 60_000), source: "coder", data: { phase: row.phase } },
-      { type: "heartbeat", time: ISO(20 * 60_000), source: "coder", data: {} },
-      { type: "heartbeat", time: ISO(15 * 60_000), source: "coder", data: {} },
-      { type: "note", time: ISO(10 * 60_000), source: "coder",
+      { type: "phase.enter", time: ISO(58 * 60_000), source: project + "/" + name, actor: "lead", data: { phase: "plan" } },
+      { type: "agent.spawn", time: ISO(57 * 60_000), source: project + "/" + name, actor: "lead", data: { role: "coder" } },
+      { type: "phase.enter", time: ISO(40 * 60_000), source: project + "/" + name, actor: "coder", data: { phase: row.phase } },
+      { type: "heartbeat", time: ISO(20 * 60_000), source: project + "/" + name, actor: "coder", data: {} },
+      { type: "heartbeat", time: ISO(15 * 60_000), source: project + "/" + name, actor: "coder", data: {} },
+      { type: "note", time: ISO(10 * 60_000), source: project + "/" + name, actor: "coder",
         data: { level: "info", topic: "status", text: "working through the " + row.phase + " step" } },
     ],
     doc: row.mode === "collaborative"
@@ -203,6 +204,7 @@ function sampleConfig(project) {
       terminal: { program: "ghostty" },
       identity: { github_org: "andres-ortizl" },
       ports: [], models: {}, phases_skip: [],
+      reactors: {},
     };
   }
   return {
@@ -213,6 +215,7 @@ function sampleConfig(project) {
     ],
     models: { coder: "sonnet", reviewer: "opus" },
     phases_skip: [],
+    reactors: { ci: "/react-to-pipelines", pr_review: "/react-to-greptile" },
   };
 }
 
@@ -416,6 +419,115 @@ function renderMinion(row) {
 
 let LAST_FLEET = [];
 
+// Fleet sort: "recent" (last activity), "state" (health), or "name". Persisted.
+const FLEET_SORTS = ["recent", "state", "name"];
+let FLEET_SORT = FLEET_SORTS.includes(localStorage.dexFleetSort) ? localStorage.dexFleetSort : "recent";
+// State order = activity gradient: working first, done last.
+const HEALTH_RANK = { alive: 0, "needs-you": 1, idle: 2, stale: 3, done: 4 };
+
+function sortRows(rows) {
+  const r = [...rows];
+  const recency = (a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0);
+  const byName = (a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name);
+  if (FLEET_SORT === "name") return r.sort(byName);
+  if (FLEET_SORT === "state") {
+    return r.sort(
+      (a, b) => (HEALTH_RANK[a.health] ?? 9) - (HEALTH_RANK[b.health] ?? 9) || recency(a, b) || byName(a, b)
+    );
+  }
+  return r.sort((a, b) => recency(a, b) || byName(a, b));
+}
+
+// Team panes polling (C3 / D2): runs only while the detail is open.
+let TEAM_POLL_TIMER = null;
+let TEAM_PANES_WRAP = null;
+
+function stopTeamPoll() {
+  if (TEAM_POLL_TIMER !== null) {
+    clearInterval(TEAM_POLL_TIMER);
+    TEAM_POLL_TIMER = null;
+  }
+}
+
+async function loadTeamPanes(project, name) {
+  const t = window.__TAURI__;
+  if (t && t.core) {
+    return await t.core.invoke("team_panes", { project, name })
+      .catch(() => ({ socket_name: null, panes: [] }));
+  }
+  return sampleTeamPanes(project, name);
+}
+
+// Sample fallback for the standalone browser prototype.
+function sampleTeamPanes(project, name) {
+  const row = LAST_FLEET.find((r) => r.project === project && r.name === name);
+  if (!row || row.health !== "alive") return { socket_name: null, panes: [] };
+  return {
+    socket_name: "claude-swarm-12345",
+    panes: [
+      { title: "dex-coder", text: "→ Implementing attach_argv...\n  RED: terminal tests\n  Writing tmux new-session -A ...\n  cargo test\n" },
+      { title: "dex-reviewer", text: "Waiting for coder report...\n" },
+    ],
+  };
+}
+
+function renderTeamPanes(result) {
+  const panes = result && result.panes ? result.panes : [];
+  const wrap = el("div", "d-team-panes");
+  if (panes.length === 0) return wrap; // empty; CSS hides via :empty
+  const headRow = el("div", "team-panes-head-row");
+  headRow.appendChild(el("span", "team-panes-head", "live team"));
+  // Watch team button: opens a read-only terminal view of the live swarm session.
+  if (result && result.socket_name) {
+    const watchBtn = el("button", "d-attach");
+    watchBtn.type = "button";
+    watchBtn.innerHTML = ICONS.terminal;
+    watchBtn.appendChild(document.createTextNode("watch"));
+    watchBtn.addEventListener("click", () => {
+      const t = window.__TAURI__;
+      if (t && t.core && CURRENT_DETAIL) {
+        t.core.invoke("watch_team", {
+          project: CURRENT_DETAIL.state.project,
+          name: CURRENT_DETAIL.state.name,
+        }).catch(() => {});
+      }
+    });
+    headRow.appendChild(watchBtn);
+  }
+  wrap.appendChild(headRow);
+  panes.forEach(({ title, text }) => {
+    const pane = el("div", "team-pane");
+    pane.appendChild(el("span", "team-pane-label", title));
+    const pre = el("pre", "team-pane-text");
+    pre.textContent = text;
+    pane.appendChild(pre);
+    wrap.appendChild(pane);
+  });
+  return wrap;
+}
+
+function updateTeamPanesPanel(result, project, name) {
+  const hasTeam = result && result.panes && result.panes.length > 0;
+  // Drive the "working now" pulse from real pane data rather than the health label.
+  const detail = document.getElementById("detail");
+  if (detail && !detail.hidden) {
+    if (hasTeam) detail.dataset.working = "true";
+    else delete detail.dataset.working;
+  }
+  document.querySelectorAll(".minion").forEach((card) => {
+    if (card.dataset.project === project && card.dataset.name === name) {
+      if (hasTeam) card.dataset.working = "true";
+      else delete card.dataset.working;
+    }
+  });
+  // Update the pane panel content
+  if (TEAM_PANES_WRAP) {
+    while (TEAM_PANES_WRAP.firstChild) TEAM_PANES_WRAP.removeChild(TEAM_PANES_WRAP.firstChild);
+    const fresh = renderTeamPanes(result || { socket_name: null, panes: [] });
+    while (fresh.firstChild) TEAM_PANES_WRAP.appendChild(fresh.firstChild);
+  }
+}
+
 // Sidebar state: which projects are expanded + a per-project config cache
 // (undefined = not fetched, "loading", null = none, or the Effective object).
 const SB_EXPANDED = new Set();
@@ -438,9 +550,7 @@ function renderFleet(rows) {
     count.textContent = "0 specs";
     return;
   }
-  const sorted = [...rows].sort(
-    (a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name)
-  );
+  const sorted = sortRows(rows);
   sorted.forEach((row, i) => {
     const card = renderMinion(row);
     card.style.animationDelay = i * 40 + "ms";
@@ -546,8 +656,13 @@ function renderConfig(project) {
   }
   const rows = [];
   const p = cfg.providers || {};
+  const reactors = cfg.reactors || {};
   ["notifier", "ci", "pr_review", "multiplexer"].forEach((k) => {
-    if (p[k]) rows.push([k.replace("_", " "), p[k]]);
+    if (p[k]) {
+      rows.push([k.replace("_", " "), p[k]]);
+      const reactor = reactors[k];
+      if (reactor) rows.push(["↳ reactor", reactor]);
+    }
   });
   const m = cfg.models || {};
   ["coder", "reviewer", "designer", "curator"].forEach((k) => { if (m[k]) rows.push([k, m[k]]); });
@@ -607,6 +722,12 @@ function renderState(s) {
 
   if (s.branch) panel.appendChild(kv("branch", s.branch, { mono: true }));
   if (s.mode === "collaborative") panel.appendChild(kv("mode", "collaborative"));
+  if (s.session_id) {
+    const v = el("span", "kv-val mono");
+    v.textContent = s.session_id.length > 12 ? s.session_id.slice(0, 12) + "…" : s.session_id;
+    v.title = s.session_id;
+    panel.appendChild(kv("session id", v));
+  }
   if (s.offset != null) panel.appendChild(kv("port offset", "+" + s.offset, { mono: true }));
 
   if (s.ports && Object.keys(s.ports).length) {
@@ -819,10 +940,16 @@ function eventRow(ev) {
   }
   row.appendChild(body);
 
+  const timeWrap = el("div", "tl-time-col");
   const time = el("span", "tl-time");
   time.textContent = fmtUTC(ev.time);
   time.title = ev.time + (ev.source ? "  ·  " + ev.source : "");
-  row.appendChild(time);
+  timeWrap.appendChild(time);
+  const actor = ev.actor || "system";
+  const by = el("span", "tl-actor");
+  by.textContent = "by " + actor;
+  timeWrap.appendChild(by);
+  row.appendChild(timeWrap);
 
   return row;
 }
@@ -893,7 +1020,22 @@ function renderDetail(detail) {
 
   root.appendChild(head);
   root.appendChild(renderState(s));
+
+  // Live team panes panel: populated by the poller below; hidden when empty.
+  const teamWrap = el("div", "d-team-panes");
+  root.appendChild(teamWrap);
+  TEAM_PANES_WRAP = teamWrap;
+
   root.appendChild(renderDetailPanel(detail));
+
+  // Poll pane content while the detail is open; stop on navigate-away.
+  stopTeamPoll();
+  loadTeamPanes(s.project, s.name).then((result) => updateTeamPanesPanel(result, s.project, s.name));
+  TEAM_POLL_TIMER = setInterval(() => {
+    if (!document.getElementById("detail").hidden) {
+      loadTeamPanes(s.project, s.name).then((result) => updateTeamPanesPanel(result, s.project, s.name));
+    }
+  }, 1500);
 }
 
 let DETAIL_TAB = "events";
@@ -1121,6 +1263,8 @@ async function loadDetail(project, name) {
 }
 
 async function navigate(route) {
+  stopTeamPoll(); // stop any active team-panes polling before navigating
+  TEAM_PANES_WRAP = null;
   if (route.view === "detail") {
     HEARTBEATS_EXPANDED = false;
     DETAIL_TAB = "events";
@@ -1167,11 +1311,29 @@ function initTheme() {
 
 // ============================ boot ============================
 
+function initFleetSort() {
+  const group = document.getElementById("fleet-sort");
+  if (!group) return;
+  const buttons = group.querySelectorAll("button[data-sort]");
+  const paint = () =>
+    buttons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.sort === FLEET_SORT ? "true" : "false"));
+  buttons.forEach((b) =>
+    b.addEventListener("click", () => {
+      FLEET_SORT = b.dataset.sort;
+      localStorage.dexFleetSort = FLEET_SORT;
+      paint();
+      renderFleet(LAST_FLEET);
+    })
+  );
+  paint();
+}
+
 function boot() {
   document.getElementById("brand-home").addEventListener("click", (e) => {
     e.preventDefault();
     navigate({ view: "fleet" });
   });
+  initFleetSort();
   window.addEventListener("hashchange", routeFromHash);
 
   const t = window.__TAURI__;

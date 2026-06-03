@@ -120,15 +120,20 @@ resource-verb command:**
 
 ```bash
 export DEX_SPEC=<project-name>/<spec-name>   # do this once at setup
+export DEX_ACTOR=lead                         # lead sets this; coder/reviewer set their own
 ```
 
 **At every milestone where you log or notify, ALSO run the matching `dex`. Every
 consequential SendMessage between agents also records one.** Fire-and-forget — if
 `dex` isn't installed the call fails harmlessly.
 
+The `--actor` flag (or `DEX_ACTOR` env var) records **who** emitted the event: `lead`,
+`coder`, or `reviewer`. Each agent sets `DEX_ACTOR` once in their environment alongside
+`DEX_SPEC` — the lead exports `lead`, and coder/reviewer spawn prompts export their role.
+
 | When | Command |
 |---|---|
-| Setup — worktree registered | `dex init --branch specdex-<spec-name> --worktree <path>` |
+| Setup — worktree registered | `dex init --branch specdex-<spec-name> --worktree <path> --session "$CLAUDE_CODE_SESSION_ID"` |
 | Setup — ports (if `[ports]` configured) | `eval "$(dex ports alloc)"` — allocates a free offset + exports the port env vars |
 | Plan | `dex phase plan` |
 | Implement starts | `dex phase build` |
@@ -215,12 +220,21 @@ elif [ -n "$TMUX" ]; then MUX=tmux
 else MUX=none; fi
 ```
 
-Per-multiplexer attach / detach (use `$MUX`'s in any later "resume" instructions):
+The spec session runs inside a named multiplexer session (`spec-<spec-name>`) so it survives
+terminal closes and can be re-attached by the desktop "attach in terminal" button. The session
+is **created if absent, attached if present** (idempotent) — so re-running setup never spawns
+a second claude.
 
-| MUX | start/attach | detach |
+Per-multiplexer attach-or-create and detach:
+
+| MUX | create-or-attach | detach |
 |---|---|---|
-| zellij | `zellij attach spec-<spec-name>` | `Ctrl+O, D` |
-| tmux | `tmux new -s spec-<spec-name>` | `Ctrl+B, D` |
+| zellij | `zellij attach spec-<spec-name> 2>/dev/null \|\| { zellij attach -b -c spec-<spec-name> && zellij --session spec-<spec-name> run -- claude --continue && zellij attach spec-<spec-name>; }` | `Ctrl+O, D` |
+| tmux | `tmux new-session -A -s spec-<spec-name>` | `Ctrl+B, D` |
+
+**`providers.multiplexer` must be set** in `.dex.toml` for the session lifecycle to activate.
+When `multiplexer` is empty/unset (`none` or absent), no session is created — "attach in terminal"
+falls back to opening a plain worktree shell. Projects that want the full lifecycle must set it.
 
 If neither `$ZELLIJ_SESSION_NAME` nor `$TMUX` is set (not currently inside a session), warn before proceeding — name `$CONFIGURED_MUX` if set, otherwise offer both:
 
@@ -358,8 +372,8 @@ Rules:
 
 Create a team with two teammates, both with `mode: "bypassPermissions"` so they can run autonomously without blocking on approval prompts:
 
-- **coder** — uses the `dex-coder` agent definition. Implements the approved plan. Mode: `bypassPermissions`.
-- **reviewer** — uses the `dex-reviewer` agent definition. Reviews the coder's work. Mode: `bypassPermissions`.
+- **coder** — uses the `dex-coder` agent definition. Implements the approved plan. Mode: `bypassPermissions`. Spawn prompt must include: `export DEX_ACTOR=coder` (alongside `DEX_SPEC`).
+- **reviewer** — uses the `dex-reviewer` agent definition. Reviews the coder's work. Mode: `bypassPermissions`. Spawn prompt must include: `export DEX_ACTOR=reviewer` (alongside `DEX_SPEC`).
 
 > **Communication model — two planes.** Both teammates have `SendMessage`, so messaging is bidirectional and peer-to-peer (full mesh).
 > - **SendMessage = delivery plane** (one-to-one, needs a live recipient). Use it to cut roundtrips: coder/reviewer report to you directly, and the reviewer messages the coder its findings directly (no lead relay). This is the fast lane.

@@ -21,6 +21,9 @@ struct Cli {
     /// Target spec as <project>/<name> (defaults to $DEX_SPEC)
     #[arg(short, long, global = true, env = "DEX_SPEC")]
     spec: Option<String>,
+    /// Actor emitting this event: lead | coder | reviewer (defaults to $DEX_ACTOR)
+    #[arg(long, global = true, env = "DEX_ACTOR")]
+    actor: Option<String>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -36,6 +39,9 @@ enum Cmd {
         /// Mark this as a human-driven session (badged apart from autonomous minions)
         #[arg(long)]
         collaborative: bool,
+        /// Claude Code session id for session resumption (value of $CLAUDE_CODE_SESSION_ID)
+        #[arg(long)]
+        session: Option<String>,
     },
     /// Port allocation
     Ports {
@@ -173,17 +179,18 @@ fn main() -> Result<()> {
     let spec = cli
         .spec
         .ok_or_else(|| anyhow!("no target spec — set DEX_SPEC=<project>/<name> or pass -s"))?;
+    let actor = cli.actor.as_deref();
     let (project, name) = split_spec(&spec)?;
     if let Cmd::Ports { op } = cli.cmd {
-        return ports_cmd(&project, &name, op);
+        return ports_cmd(&project, &name, op, actor);
     }
     let payload = build_payload(cli.cmd)?;
-    let state = emit(&project, &name, payload)?;
+    let state = emit(&project, &name, payload, actor)?;
     println!("{spec} → {}", state.phase.as_str());
     Ok(())
 }
 
-fn ports_cmd(project: &str, name: &str, op: PortsOp) -> Result<()> {
+fn ports_cmd(project: &str, name: &str, op: PortsOp, actor: Option<&str>) -> Result<()> {
     match op {
         PortsOp::Alloc => {
             let eff = load_effective(&std::env::current_dir()?)?;
@@ -194,7 +201,7 @@ fn ports_cmd(project: &str, name: &str, op: PortsOp) -> Result<()> {
             let used = used_offsets(project, name)?;
             let (offset, map) = pick_offset(&eff.ports, &used, 10, 990, port_is_free)
                 .ok_or_else(|| anyhow!("no free port offset found up to 990"))?;
-            emit(project, name, Payload::PortsAssigned { offset, ports: map.clone() })?;
+            emit(project, name, Payload::PortsAssigned { offset, ports: map.clone() }, actor)?;
             for ps in &eff.ports {
                 if let Some(p) = map.get(&ps.service) {
                     println!("export {}={}", ps.env, p);
@@ -348,10 +355,11 @@ re-run `dex install --update` to overwrite it, or remove it to let specdex manag
 
 fn build_payload(cmd: Cmd) -> Result<Payload> {
     Ok(match cmd {
-        Cmd::Init { branch, worktree, collaborative } => Payload::Init {
+        Cmd::Init { branch, worktree, collaborative, session } => Payload::Init {
             branch,
             worktree,
             mode: if collaborative { SpecMode::Collaborative } else { SpecMode::Autonomous },
+            session_id: session,
         },
         Cmd::Phase { phase, reason } => Payload::PhaseEnter { phase: parse_phase(&phase)?, reason },
         Cmd::Block { reason } => Payload::Block { reason },

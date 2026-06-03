@@ -321,6 +321,38 @@ pub fn referenced_skills(eff: &Effective) -> Vec<String> {
     out
 }
 
+/// Resolved reactor names for the providers that have them. Computed from the
+/// registry — never re-derive this in JS or CLI code.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReactorView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ci: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pr_review: Option<String>,
+}
+
+/// The effective config plus registry-derived reactor names. Returned by the
+/// desktop `project_config` command so the UI can show resolved reactors.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConfigView {
+    #[serde(flatten)]
+    pub effective: Effective,
+    pub reactors: ReactorView,
+}
+
+pub fn config_view(eff: &Effective) -> ConfigView {
+    let ci = eff.providers.ci.as_deref()
+        .and_then(|n| reactor_for("ci", n))
+        .map(String::from);
+    let pr_review = eff.providers.pr_review.as_deref()
+        .and_then(|n| reactor_for("pr_review", n))
+        .map(String::from);
+    ConfigView {
+        effective: eff.clone(),
+        reactors: ReactorView { ci, pr_review },
+    }
+}
+
 pub fn get_dotted(eff: &Effective, key: &str) -> Result<String> {
     match key {
         "providers.notifier" => Ok(eff.providers.notifier.clone().unwrap_or_default()),
@@ -685,5 +717,63 @@ multiplexer = "{mux}""#));
     #[test]
     fn project_file_returns_none_at_root() {
         assert!(project_file(Path::new("/")).is_none());
+    }
+
+    #[test]
+    fn config_view_greptile_resolves_reactor() {
+        let layer = parse_layer(r#"
+            [providers]
+            pr_review = "greptile"
+        "#);
+        let eff = merge_layers(vec![layer]);
+        let view = config_view(&eff);
+        assert_eq!(view.reactors.pr_review.as_deref(), Some("/react-to-greptile"));
+        assert!(view.reactors.ci.is_none());
+    }
+
+    #[test]
+    fn config_view_github_actions_ci_reactor() {
+        let layer = parse_layer(r#"
+            [providers]
+            ci = "github-actions"
+        "#);
+        let eff = merge_layers(vec![layer]);
+        let view = config_view(&eff);
+        assert_eq!(view.reactors.ci.as_deref(), Some("/react-to-pipelines"));
+        assert!(view.reactors.pr_review.is_none());
+    }
+
+    #[test]
+    fn config_view_none_provider_has_no_reactor() {
+        let layer = parse_layer(r#"
+            [providers]
+            ci = "none"
+            pr_review = "none"
+        "#);
+        let eff = merge_layers(vec![layer]);
+        let view = config_view(&eff);
+        assert!(view.reactors.ci.is_none());
+        assert!(view.reactors.pr_review.is_none());
+    }
+
+    #[test]
+    fn config_view_unset_provider_has_no_reactor() {
+        let eff = merge_layers(vec![]);
+        let view = config_view(&eff);
+        assert!(view.reactors.ci.is_none());
+        assert!(view.reactors.pr_review.is_none());
+    }
+
+    #[test]
+    fn config_view_serializes_with_reactors_key() {
+        let layer = parse_layer(r#"
+            [providers]
+            pr_review = "greptile"
+        "#);
+        let eff = merge_layers(vec![layer]);
+        let view = config_view(&eff);
+        let json: serde_json::Value = serde_json::to_value(&view).unwrap();
+        assert_eq!(json["reactors"]["pr_review"], "/react-to-greptile");
+        assert!(json["reactors"]["ci"].is_null() || json["reactors"].get("ci").is_none());
     }
 }
