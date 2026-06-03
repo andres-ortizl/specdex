@@ -8,3 +8,6 @@ skip = ["verify"]
 
 [identity]
 github_org = "andres-ortizl"
+
+[terminal]
+program = "ghostty"

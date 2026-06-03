@@ -114,6 +114,7 @@ Flag violations of:
 - Trivial tests (testing types, constructors, getters, built-in behavior)
 - Over-testing (testing implementation details instead of actual behavior)
 - Hand-edited `pyproject.toml` instead of `uv add`/`uv remove`
+- Formatting churn / files changed outside the plan's scope — e.g. an auto-formatter (`cargo fmt`, `prettier`, `black`) run across untouched files. Flag as BLOCKER: the diff must contain only the change's real edits.
 
 ## What you do NOT do
 

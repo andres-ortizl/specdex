@@ -974,6 +974,119 @@ h1, h2 { margin: 0; }
   color: var(--ink-faint);
 }
 
+/* ============================ sidebar toml ============================ */
+
+/* full .dex.toml shown in the detail panel (roomy, unlike the sidebar) */
+.toml-doc {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-muted);
+  white-space: pre;
+  overflow-x: auto;
+  background: var(--well);
+  border-radius: var(--r-chip);
+  box-shadow: var(--press);
+  padding: var(--s-3) var(--s-4);
+}
+.toml-doc.empty {
+  color: var(--ink-faint);
+  font-style: italic;
+  white-space: normal;
+  background: none;
+  box-shadow: none;
+  padding: var(--s-3) 0;
+}
+
+.tk-section { color: var(--accent); }
+.tk-key     { color: var(--ink-muted); }
+.tk-str     { color: var(--alive); }
+.tk-comment { color: var(--ink-faint); font-style: italic; }
+
+/* ============================ markdown doc ============================ */
+
+.md-doc {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink);
+}
+
+.md-doc h1, .md-doc h2, .md-doc h3,
+.md-doc h4, .md-doc h5, .md-doc h6 {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: var(--s-5) 0 var(--s-2);
+  color: var(--ink);
+}
+.md-doc h1 { font-size: 22px; }
+.md-doc h2 { font-size: 18px; }
+.md-doc h3 { font-size: 16px; }
+.md-doc h4, .md-doc h5, .md-doc h6 { font-size: 14px; }
+
+.md-doc p { margin: 0 0 var(--s-3); }
+
+.md-doc ul, .md-doc ol {
+  margin: 0 0 var(--s-3);
+  padding-left: var(--s-5);
+}
+.md-doc li { margin-bottom: var(--s-1); }
+
+.md-doc li.task-item { list-style: none; margin-left: calc(-1 * var(--s-4)); }
+.md-doc .task-box { color: var(--ink-muted); margin-right: var(--s-1); }
+
+.md-doc code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--sunk);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.md-doc pre {
+  margin: 0 0 var(--s-3);
+  background: var(--sunk);
+  border-radius: var(--r-chip);
+  box-shadow: var(--press);
+  padding: var(--s-3) var(--s-4);
+  overflow-x: auto;
+}
+.md-doc pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.md-doc blockquote {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-2) var(--s-4);
+  border-left: 3px solid var(--rule);
+  color: var(--ink-muted);
+}
+.md-doc blockquote p { margin: 0; }
+
+.md-doc hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: var(--s-5) 0;
+}
+
+.md-doc a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.md-doc a:hover { border-bottom-color: var(--accent); }
+
+.md-doc strong { font-weight: 500; }
+.md-doc em { font-style: italic; }
+
+.md-empty {
+  color: var(--ink-faint);
+  font-style: italic;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
 /* ============================ reduced motion ============================ */
 
 @media (prefers-reduced-motion: reduce) {

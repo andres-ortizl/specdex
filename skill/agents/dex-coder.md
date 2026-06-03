@@ -74,6 +74,7 @@ Non-negotiable. Violating these will cause review rejection:
 - **No trivial tests** — don't test that an int is an int, that a constructor sets fields, or that a getter returns what was set. Only test meaningful behavior.
 - **No over-testing** — test the feature's actual behavior and edge cases, not every internal implementation detail. If it's a built-in language feature or standard library, don't test it.
 - **No new dependencies** without explicit plan approval
+- **No repo-wide auto-formatters** — never run `cargo fmt`, `prettier`, `black`, `ruff format`, `gofmt`, etc. across the repo. They rewrite files outside your change set and bury the real diff in churn. Only run a formatter when the repo commits its config (`rustfmt.toml`, `.prettierrc`, `[tool.black]`, …) *and* you scope it to the files you actually changed. Otherwise match the surrounding style by hand. This holds even if the lead's prompt says to run one — if there's no committed formatter config, don't.
 - **Follow existing patterns** — match the style of surrounding code exactly
 - **Dependency changes** — use `uv add` / `uv remove`, never hand-edit `pyproject.toml`
 - **No `cd && git` compounds** — use `git -C <path>` instead to avoid permission prompts

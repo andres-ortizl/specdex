@@ -110,6 +110,12 @@ pub struct Models {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Terminal {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Effective {
     #[serde(default)]
     pub providers: Providers,
@@ -123,6 +129,8 @@ pub struct Effective {
     pub identity: Identity,
     #[serde(default)]
     pub models: Models,
+    #[serde(default)]
+    pub terminal: Terminal,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -139,6 +147,8 @@ struct Layer {
     identity: Identity,
     #[serde(default)]
     models: Models,
+    #[serde(default)]
+    terminal: Terminal,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -176,6 +186,7 @@ fn merge(base: Effective, over: Layer) -> Effective {
             designer: over.models.designer.or(base.models.designer),
             curator: over.models.curator.or(base.models.curator),
         },
+        terminal: Terminal { program: over.terminal.program.or(base.terminal.program) },
     }
 }
 
@@ -243,6 +254,10 @@ fn find_project_file(cwd: &Path) -> Option<PathBuf> {
         }
         dir = dir.parent()?;
     }
+}
+
+pub fn project_file(cwd: &Path) -> Option<PathBuf> {
+    find_project_file(cwd)
 }
 
 /// The optional global personal config: machine-wide defaults (notifier, identity)
@@ -340,6 +355,7 @@ pub fn get_dotted(eff: &Effective, key: &str) -> Result<String> {
         "models.reviewer" => Ok(eff.models.reviewer.clone().unwrap_or_default()),
         "models.designer" => Ok(eff.models.designer.clone().unwrap_or_default()),
         "models.curator" => Ok(eff.models.curator.clone().unwrap_or_default()),
+        "terminal.program" => Ok(eff.terminal.program.clone().unwrap_or_default()),
         _ => Err(anyhow!("unknown config key: {key}")),
     }
 }
@@ -378,6 +394,7 @@ pub fn schema() -> serde_json::Value {
             "note": "service = logical name; base = base port; env = env var the allocated port exports as. A CLI project declares none."
         },
         "identity": { "fields": ["env_file", "github_org"] },
+        "terminal": { "fields": ["program"], "note": "terminal emulator for 'attach in terminal'; defaults to ghostty" },
         "authoring": {
             "format": "toml",
             "project_file": ".dex.toml at repo root (primary config)",
@@ -629,5 +646,44 @@ multiplexer = "{mux}""#));
         let eff = merge_layers(vec![vault, project]);
         assert!(eff.hooks.contains_key(&HookPoint::OnShip));
         assert!(eff.hooks.contains_key(&HookPoint::OnVerifyCi));
+    }
+
+    #[test]
+    fn terminal_parses_from_toml() {
+        let eff = merge_layers(vec![parse_layer("[terminal]\nprogram = \"ghostty\"")]);
+        assert_eq!(eff.terminal.program.as_deref(), Some("ghostty"));
+    }
+
+    #[test]
+    fn terminal_defaults_to_empty_when_unset() {
+        assert!(merge_layers(vec![]).terminal.program.is_none());
+    }
+
+    #[test]
+    fn get_dotted_terminal_program() {
+        let eff = merge_layers(vec![parse_layer("[terminal]\nprogram = \"alacritty\"")]);
+        assert_eq!(get_dotted(&eff, "terminal.program").unwrap(), "alacritty");
+    }
+
+    #[test]
+    fn get_dotted_terminal_program_empty_when_unset() {
+        assert_eq!(get_dotted(&merge_layers(vec![]), "terminal.program").unwrap(), "");
+    }
+
+    #[test]
+    fn schema_includes_terminal() {
+        let s = schema();
+        assert!(s["terminal"]["fields"].as_array().unwrap().iter().any(|v| v == "program"));
+    }
+
+    #[test]
+    fn project_file_finds_dex_toml() {
+        let found = project_file(Path::new(env!("CARGO_MANIFEST_DIR")));
+        assert!(found.is_some() && found.unwrap().ends_with(".dex.toml"));
+    }
+
+    #[test]
+    fn project_file_returns_none_at_root() {
+        assert!(project_file(Path::new("/")).is_none());
     }
 }

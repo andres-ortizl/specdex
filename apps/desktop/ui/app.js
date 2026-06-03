@@ -121,6 +121,7 @@ function sampleDetail(project, name) {
       ],
       doc: "# verify-flake\n\nStabilize the flaky results-serializer test under CI load.\n\n## Acceptance Criteria\n- [ ] test passes 50× in a row locally\n- [ ] no N+1 query in the results serializer\n",
       logbook: "# verify-flake — logbook\n\nStatus: BLOCKED\n\n- 95m ago — spec created, worktree + ports assigned\n- 80m ago — build started (coder c-7a1)\n- 60m ago — tests green (320 passed)\n- 45m ago — review round 1: changes requested (1 blocker, 3 issues)\n- 30m ago — addressing review feedback\n- 20m ago — review round 2: approved\n- 18m ago — PR #4012 created\n- 14m ago — CI gate failed (infra flake)\n- 12m ago — BLOCKED: needs a human CI re-run\n",
+      config_raw: sampleConfigRaw(project),
     };
   }
   // Generic calm sample for any other card.
@@ -155,13 +156,54 @@ function sampleDetail(project, name) {
       ? "# " + name + "\n\nHuman-driven session — planning live with the lead.\n"
       : null,
     logbook: "# " + name + " — logbook\n\nStatus: " + row.phase.toUpperCase() + "\n\n- 60m ago — spec created\n- 40m ago — entered " + row.phase + "\n- 10m ago — working through the " + row.phase + " step\n",
+    config_raw: sampleConfigRaw(project),
   };
 }
 
-// Sample project config for the standalone prototype (no Tauri backend).
+function sampleConfigRaw(project) {
+  if (project === "specdex") {
+    return `[providers]
+notifier = "none"
+ci = "none"
+pr_review = "none"
+
+[terminal]
+program = "ghostty"
+
+[identity]
+github_org = "andres-ortizl"
+`;
+  }
+  return `[providers]
+notifier = "slack"
+ci = "github-actions"
+pr_review = "greptile"
+
+[models]
+coder = "sonnet"
+reviewer = "opus"
+
+[[ports]]
+service = "backend"
+base = 8000
+env = "BACKEND_PORT"
+
+[[ports]]
+service = "frontend"
+base = 5173
+env = "VITE_PORT"
+`;
+}
+
+// Curated config summary for the standalone prototype sidebar (no Tauri backend).
 function sampleConfig(project) {
   if (project === "specdex") {
-    return { providers: { notifier: "none", ci: "none", pr_review: "none" }, ports: [], models: {}, phases_skip: [] };
+    return {
+      providers: { notifier: "none", ci: "none", pr_review: "none" },
+      terminal: { program: "ghostty" },
+      identity: { github_org: "andres-ortizl" },
+      ports: [], models: {}, phases_skip: [],
+    };
   }
   return {
     providers: { notifier: "slack", ci: "github-actions", pr_review: "greptile" },
@@ -487,7 +529,8 @@ function cfgRow(k, v) {
   return row;
 }
 
-// Read-only .dex.toml summary — only the fields that are set.
+// Read-only at-a-glance summary — only the fields that are set. The full
+// verbatim .dex.toml lives in the spec detail's `.dex.toml` tab.
 function renderConfig(project) {
   const wrap = el("div", "sb-config");
   const cfg = SB_CONFIG[project];
@@ -508,8 +551,10 @@ function renderConfig(project) {
   });
   const m = cfg.models || {};
   ["coder", "reviewer", "designer", "curator"].forEach((k) => { if (m[k]) rows.push([k, m[k]]); });
+  if (cfg.terminal && cfg.terminal.program) rows.push(["terminal", cfg.terminal.program]);
   if (cfg.ports && cfg.ports.length) rows.push(["ports", cfg.ports.map((x) => x.service).join(", ")]);
   if (cfg.phases_skip && cfg.phases_skip.length) rows.push(["skip", cfg.phases_skip.join(", ")]);
+  if (cfg.identity && cfg.identity.github_org) rows.push(["github", cfg.identity.github_org]);
   if (cfg.hooks && Object.keys(cfg.hooks).length) {
     const refs = Object.values(cfg.hooks).map((a) => (a && a.ref) || a).filter(Boolean).join(", ");
     if (refs) rows.push(["hooks", refs]);
@@ -822,9 +867,19 @@ function renderDetail(detail) {
   attach.type = "button";
   attach.innerHTML = ICONS.terminal;
   attach.appendChild(document.createTextNode("attach in terminal"));
-  attach.title = "dex attach " + s.name + "  (coming soon)";
   attach.addEventListener("click", () => {
-    attach.lastChild.textContent = "dex attach " + s.name;
+    const t = window.__TAURI__;
+    if (t && t.core) {
+      attach.lastChild.textContent = "attaching…";
+      t.core.invoke("attach_terminal", { project: s.project, name: s.name })
+        .then(() => { attach.lastChild.textContent = "attach in terminal"; })
+        .catch(() => {
+          attach.lastChild.textContent = "attach failed";
+          setTimeout(() => { attach.lastChild.textContent = "attach in terminal"; }, 2000);
+        });
+    } else {
+      attach.lastChild.textContent = "dex attach " + s.name;
+    }
   });
   titleRow.appendChild(attach);
   head.appendChild(titleRow);
@@ -843,8 +898,8 @@ function renderDetail(detail) {
 
 let DETAIL_TAB = "events";
 
-// One panel, three sources: the event log, spec.md, logbook.md — switched by a
-// row of drams push-buttons.
+// One panel, four sources: the event log, spec.md, logbook.md, and the project's
+// .dex.toml — switched by a row of drams push-buttons.
 function renderDetailPanel(detail) {
   const wrap = el("div", "d-panel");
 
@@ -853,6 +908,7 @@ function renderDetailPanel(detail) {
     ["events", "events.json"],
     ["spec", "spec.md"],
     ["logbook", "logbook.md"],
+    ["config", ".dex.toml"],
   ].forEach(([key, lbl]) => {
     const b = el("button", "d-tab" + (DETAIL_TAB === key ? " active" : ""));
     b.type = "button";
@@ -867,22 +923,184 @@ function renderDetailPanel(detail) {
   wrap.appendChild(tabs);
 
   if (DETAIL_TAB === "events") wrap.appendChild(renderTimeline(detail.events || []));
-  else if (DETAIL_TAB === "spec") wrap.appendChild(renderDoc(detail.doc, "No spec.md for this spec."));
-  else wrap.appendChild(renderDoc(detail.logbook, "No logbook.md for this spec."));
+  else if (DETAIL_TAB === "spec") {
+    if (detail.doc && detail.doc.trim()) wrap.appendChild(renderMarkdown(detail.doc));
+    else { const p = el("p", "md-empty"); p.textContent = "No spec.md for this spec."; wrap.appendChild(p); }
+  } else if (DETAIL_TAB === "logbook") {
+    if (detail.logbook && detail.logbook.trim()) wrap.appendChild(renderMarkdown(detail.logbook));
+    else { const p = el("p", "md-empty"); p.textContent = "No logbook.md for this spec."; wrap.appendChild(p); }
+  } else {
+    wrap.appendChild(renderTomlDoc(detail.config_raw));
+  }
 
   return wrap;
 }
 
-// A read-only markdown file — plain monospace, no markdown lib.
-function renderDoc(doc, emptyMsg) {
-  const body = el("pre", "spec-doc");
-  if (doc && doc.trim()) {
-    body.textContent = doc;
-  } else {
-    body.classList.add("empty");
-    body.textContent = emptyMsg;
+// The project's verbatim .dex.toml, line-tinted. Highlighting is per line and
+// strings are wrapped before the key so the key span's attribute quotes are
+// never re-scanned (the cause of an earlier mangled render).
+function renderTomlDoc(raw) {
+  const pre = el("pre", "toml-doc");
+  if (!raw || !raw.trim()) {
+    pre.classList.add("empty");
+    pre.textContent = "No .dex.toml for this project.";
+    return pre;
   }
-  return body;
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  pre.innerHTML = raw.split("\n").map((line) => {
+    const e = esc(line);
+    if (/^\s*#/.test(e)) return `<span class="tk-comment">${e}</span>`;
+    if (/^\s*\[/.test(e)) return `<span class="tk-section">${e}</span>`;
+    return e
+      .replace(/"[^"]*"/g, (m) => `<span class="tk-str">${m}</span>`)
+      .replace(/^(\s*)([\w.-]+)(\s*=)/, '$1<span class="tk-key">$2</span>$3');
+  }).join("\n");
+  return pre;
+}
+
+function renderMarkdown(text) {
+  const div = el("div", "md-doc");
+  if (!text || !text.trim()) return div;
+
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escAttr = (s) => esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const safeUrl = (url) => /^(https?:|mailto:|\/|#|\.)/.test(url) || !url.includes(":");
+
+  const inlineSpans = (s) =>
+    esc(s)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, url) => {
+        if (!safeUrl(url)) return txt;
+        const guard = window.__TAURI__ ? ' onclick="event.preventDefault()"' : "";
+        return `<a href="${escAttr(url)}"${guard}>${txt}</a>`;
+      });
+
+  const lines = text.split("\n");
+  let i = 0;
+  let listStack = [];
+
+  const flushLists = () => {
+    while (listStack.length) {
+      div.appendChild(listStack.pop());
+    }
+  };
+
+  const getOrCreateList = (tag) => {
+    if (listStack.length && listStack[listStack.length - 1].tagName.toLowerCase() === tag) {
+      return listStack[listStack.length - 1];
+    }
+    flushLists();
+    const lst = document.createElement(tag);
+    listStack.push(lst);
+    return lst;
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    const fenceMatch = line.match(/^```/);
+    if (fenceMatch) {
+      flushLists();
+      i++;
+      const codeLines = [];
+      while (i < lines.length && !lines[i].match(/^```/)) {
+        codeLines.push(esc(lines[i]));
+        i++;
+      }
+      i++;
+      const pre = document.createElement("pre");
+      const code = document.createElement("code");
+      code.innerHTML = codeLines.join("\n");
+      pre.appendChild(code);
+      div.appendChild(pre);
+      continue;
+    }
+
+    const hMatch = line.match(/^(#{1,6})\s+(.*)/);
+    if (hMatch) {
+      flushLists();
+      const level = hMatch[1].length;
+      const h = document.createElement("h" + level);
+      h.innerHTML = inlineSpans(hMatch[2]);
+      div.appendChild(h);
+      i++;
+      continue;
+    }
+
+    if (/^---+$|^\*\*\*+$/.test(line)) {
+      flushLists();
+      div.appendChild(document.createElement("hr"));
+      i++;
+      continue;
+    }
+
+    const bqMatch = line.match(/^>\s?(.*)/);
+    if (bqMatch) {
+      flushLists();
+      const bq = document.createElement("blockquote");
+      const p = document.createElement("p");
+      p.innerHTML = inlineSpans(bqMatch[1]);
+      bq.appendChild(p);
+      div.appendChild(bq);
+      i++;
+      continue;
+    }
+
+    const taskMatch = line.match(/^[-*]\s+\[([ xX])\]\s+(.*)/);
+    if (taskMatch) {
+      const lst = getOrCreateList("ul");
+      const li = document.createElement("li");
+      li.className = "task-item";
+      const checked = taskMatch[1].toLowerCase() === "x";
+      li.innerHTML = `<span class="task-box">${checked ? "☑" : "☐"}</span> ${inlineSpans(taskMatch[2])}`;
+      lst.appendChild(li);
+      i++;
+      continue;
+    }
+
+    const ulMatch = line.match(/^[-*]\s+(.*)/);
+    if (ulMatch) {
+      const lst = getOrCreateList("ul");
+      const li = document.createElement("li");
+      li.innerHTML = inlineSpans(ulMatch[1]);
+      lst.appendChild(li);
+      i++;
+      continue;
+    }
+
+    const olMatch = line.match(/^\d+\.\s+(.*)/);
+    if (olMatch) {
+      const lst = getOrCreateList("ol");
+      const li = document.createElement("li");
+      li.innerHTML = inlineSpans(olMatch[1]);
+      lst.appendChild(li);
+      i++;
+      continue;
+    }
+
+    if (line.trim() === "") {
+      flushLists();
+      i++;
+      continue;
+    }
+
+    flushLists();
+    const paraLines = [];
+    while (i < lines.length && lines[i].trim() !== "" && !lines[i].match(/^(#{1,6}\s|```|---+|\*\*\*+|>|[-*]\s|\d+\.\s)/)) {
+      paraLines.push(lines[i]);
+      i++;
+    }
+    if (paraLines.length) {
+      const p = document.createElement("p");
+      p.innerHTML = paraLines.map(inlineSpans).join("<br>");
+      div.appendChild(p);
+    }
+  }
+
+  flushLists();
+  return div;
 }
 
 // ============================ routing ============================
