@@ -4,6 +4,7 @@
 //   - teammate processes have --parent-session-id <CLAUDE_CODE_SESSION_ID> in their argv
 // If these internals change, all functions degrade gracefully (return None / empty).
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -22,6 +23,56 @@ pub fn argv_contains_parent_session(argv: &str, session_id: &str) -> bool {
     } else {
         false
     }
+}
+
+/// True if the process subtree rooted at `root_pid` contains any process whose argv
+/// has `--parent-session-id <session_id>`. `process_table` maps pid → (ppid, args).
+pub fn pid_subtree_has_session(
+    process_table: &HashMap<u32, (u32, String)>,
+    root_pid: u32,
+    session_id: &str,
+) -> bool {
+    if let Some((_, argv)) = process_table.get(&root_pid) {
+        if argv_contains_parent_session(argv, session_id) {
+            return true;
+        }
+    }
+    for (&pid, (ppid, _)) in process_table {
+        if *ppid == root_pid && pid != root_pid {
+            if pid_subtree_has_session(process_table, pid, session_id) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Build a process table from `ps -axo pid=,ppid=,args=`.
+/// Returns empty map on any failure; callers degrade gracefully.
+fn build_process_table() -> HashMap<u32, (u32, String)> {
+    let out = match Command::new("ps").args(["-axo", "pid=,ppid=,args="]).output() {
+        Ok(o) if o.status.success() => o,
+        _ => return HashMap::new(),
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut table = HashMap::new();
+    for line in text.lines() {
+        let line = line.trim_start();
+        if line.is_empty() {
+            continue;
+        }
+        let Some((pid_str, rest)) = line.split_once(char::is_whitespace) else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let Some((ppid_str, args)) = rest.split_once(char::is_whitespace) else {
+            continue;
+        };
+        let Ok(pid) = pid_str.parse::<u32>() else { continue };
+        let Ok(ppid) = ppid_str.parse::<u32>() else { continue };
+        table.insert(pid, (ppid, args.trim_start().to_string()));
+    }
+    table
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +172,7 @@ fn match_panes_for_session(socket_name: &str, session_id: &str) -> Option<Vec<(S
     if !out.status.success() {
         return None;
     }
+    let process_table = build_process_table();
     let text = String::from_utf8_lossy(&out.stdout);
     let mut matched = vec![];
     for line in text.lines() {
@@ -129,30 +181,14 @@ fn match_panes_for_session(socket_name: &str, session_id: &str) -> Option<Vec<(S
             continue;
         }
         let (pane_id, title, pid_str) = (parts[0], parts[1], parts[2]);
-        let pid = pid_str.trim();
-        if pid.is_empty() {
+        let Ok(pane_pid) = pid_str.trim().parse::<u32>() else {
             continue;
-        }
-        if let Some(argv) = pane_process_argv(pid) {
-            if argv_contains_parent_session(&argv, session_id) {
-                matched.push((pane_id.to_string(), title.to_string()));
-            }
+        };
+        if pid_subtree_has_session(&process_table, pane_pid, session_id) {
+            matched.push((pane_id.to_string(), title.to_string()));
         }
     }
     Some(matched)
-}
-
-fn pane_process_argv(pid: &str) -> Option<String> {
-    let out = Command::new("ps")
-        .args(["-p", pid, "-o", "args="])
-        .output()
-        .ok()?;
-    if out.status.success() && !out.stdout.is_empty() {
-        return Some(String::from_utf8_lossy(&out.stdout).trim().to_string());
-    }
-    // Linux fallback: /proc/<pid>/cmdline uses NUL-separated args
-    let cmdline = std::fs::read_to_string(format!("/proc/{pid}/cmdline")).ok()?;
-    Some(cmdline.replace('\0', " ").trim().to_string())
 }
 
 fn capture_pane(socket_name: &str, pane_id: &str) -> Option<String> {
@@ -217,6 +253,66 @@ mod tests {
         let cmdline = "claude\0--parent-session-id\0abc123\0--other\0";
         let normalized = cmdline.replace('\0', " ");
         assert!(argv_contains_parent_session(&normalized, "abc123"));
+    }
+
+    // ---- pid_subtree_has_session ----
+
+    fn make_table(entries: &[(u32, u32, &str)]) -> HashMap<u32, (u32, String)> {
+        entries.iter().map(|&(pid, ppid, args)| (pid, (ppid, args.to_string()))).collect()
+    }
+
+    #[test]
+    fn subtree_matches_direct_child_not_root() {
+        // pane shell (100) has no session id; its child claude (101) does
+        let table = make_table(&[
+            (100, 1, "-zsh"),
+            (101, 100, "claude --parent-session-id abc123"),
+        ]);
+        assert!(pid_subtree_has_session(&table, 100, "abc123"),
+            "should match via direct child");
+        assert!(!pid_subtree_has_session(&table, 100, "other"),
+            "should not match a different session id");
+    }
+
+    #[test]
+    fn subtree_no_match_when_session_absent() {
+        let table = make_table(&[
+            (100, 1, "-zsh"),
+            (101, 100, "claude --parent-session-id different-id"),
+        ]);
+        assert!(!pid_subtree_has_session(&table, 100, "abc123"));
+    }
+
+    #[test]
+    fn subtree_matches_grandchild_depth_two() {
+        // depth: pane(100) → bash(101) → claude(102)
+        let table = make_table(&[
+            (100, 1, "-zsh"),
+            (101, 100, "bash"),
+            (102, 101, "node /usr/bin/claude --parent-session-id abc123 --flag"),
+        ]);
+        assert!(pid_subtree_has_session(&table, 100, "abc123"),
+            "should match at depth 2");
+    }
+
+    #[test]
+    fn subtree_matches_root_itself() {
+        let table = make_table(&[
+            (100, 1, "claude --parent-session-id abc123"),
+        ]);
+        assert!(pid_subtree_has_session(&table, 100, "abc123"));
+    }
+
+    #[test]
+    fn subtree_ignores_processes_outside_tree() {
+        // process 200 has the session id but is not a descendant of 100
+        let table = make_table(&[
+            (100, 1, "-zsh"),
+            (101, 100, "vim"),
+            (200, 99, "claude --parent-session-id abc123"),
+        ]);
+        assert!(!pid_subtree_has_session(&table, 100, "abc123"),
+            "should not match a process outside the subtree");
     }
 
     #[test]
