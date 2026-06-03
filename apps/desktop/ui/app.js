@@ -439,7 +439,7 @@ function renderSidebar(rows) {
     const head = el("button", "sb-proj-head");
     head.type = "button";
     head.setAttribute("aria-expanded", open ? "true" : "false");
-    head.appendChild(el("span", "sb-caret", ICONS.caret));
+    head.appendChild(el("span", "sb-btn"));
     const name = el("span", "sb-proj-name");
     name.textContent = project;
     name.title = project;
@@ -884,31 +884,21 @@ function routeFromHash() {
 
 // ============================ theme ============================
 
-const THEME_ICON = { system: "system", light: "sun", dark: "moon" };
-
 function applyTheme(state) {
-  const resolved =
-    state === "system"
-      ? matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-      : state;
-  document.documentElement.dataset.theme = resolved;
+  document.documentElement.dataset.theme = state;
   const btn = document.getElementById("theme-toggle");
-  const icon = document.getElementById("theme-icon");
-  icon.innerHTML = ICONS[THEME_ICON[state === "system" ? "system" : resolved]];
+  btn.setAttribute("aria-pressed", state === "dark" ? "true" : "false");
   btn.title = "Theme: " + state;
 }
 
 function initTheme() {
-  // drams' identity lives in warm-paper light — default there, not system.
-  let state = localStorage.dexTheme || "light";
+  // drams' identity lives in warm-paper light — a 2-position switch: light ↔ dark.
+  let state = localStorage.dexTheme === "dark" ? "dark" : "light";
   applyTheme(state);
   document.getElementById("theme-toggle").addEventListener("click", () => {
-    state = state === "system" ? "light" : state === "light" ? "dark" : "system";
+    state = state === "dark" ? "light" : "dark";
     localStorage.dexTheme = state;
     applyTheme(state);
-  });
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    if ((localStorage.dexTheme || "system") === "system") applyTheme("system");
   });
 }
 

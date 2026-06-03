@@ -35,11 +35,17 @@
   --needs: var(--ember);  --needs-soft: var(--ember-soft);
   --done:  #5a86c4;  --done-soft:  #e7eef8;
 
-  /* drams is near-flat: box-shadow:none is the norm. Depth = hairline ring. */
-  --shadow: none;
   /* the signature: a 1px inset hairline ring; ember on hover */
   --ring:       inset 0 0 0 1px var(--rule);
   --ring-hover: inset 0 0 0 1px var(--ember);
+
+  /* drams hardware = soft layered depth: a raised surface, a sunk well,
+     and a hover lift. Light-warm shadows, never harsh. */
+  --lift:       0 1px 2px rgba(40,38,34,.08), 0 4px 10px rgba(40,38,34,.07), 0 10px 22px rgba(40,38,34,.05);
+  --lift-1:     0 1px 2px rgba(40,38,34,.09), 0 2px 5px rgba(40,38,34,.07);
+  --lift-hover: 0 2px 4px rgba(40,38,34,.10), 0 8px 18px rgba(40,38,34,.10), 0 18px 40px rgba(40,38,34,.08);
+  --sunk:       inset 0 1px 2px rgba(40,38,34,.12), inset 0 -1px 1px rgba(255,255,255,.6);
+  --well:       #e6e4df;        /* a recessed empty socket (rail nodes, grooves) */
 
   /* type — drams Inter, weights 400/450/500, 16px body rhythm */
   --font-sans: "Inter", "Inter Variable", -apple-system, BlinkMacSystemFont,
@@ -51,7 +57,7 @@
   --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
 
   /* radius — drams is near-square: 0/4px, circles for dots */
-  --r-card: 4px; --r-pill: 999px; --r-chip: 4px;
+  --r-card: 12px; --r-pill: 999px; --r-chip: 6px;
 
   /* motion */
   --ease: cubic-bezier(.4,.0,.2,1);
@@ -85,9 +91,14 @@
   --needs: var(--ember);  --needs-soft: var(--ember-soft);
   --done:  #7ba6e0;  --done-soft:  #1c2533;
 
-  --shadow: none;
   --ring:       inset 0 0 0 1px var(--rule);
   --ring-hover: inset 0 0 0 1px var(--ember);
+
+  --lift:       0 1px 2px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.4), 0 12px 26px rgba(0,0,0,.34);
+  --lift-1:     0 1px 2px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.38);
+  --lift-hover: 0 2px 5px rgba(0,0,0,.5), 0 10px 22px rgba(0,0,0,.45), 0 22px 48px rgba(0,0,0,.4);
+  --sunk:       inset 0 1px 3px rgba(0,0,0,.5), inset 0 -1px 1px rgba(255,255,255,.04);
+  --well:       #100e09;
 }
 
 /* ============================ base ============================ */
@@ -170,22 +181,37 @@ h1, h2 { margin: 0; }
   background: var(--rule);
 }
 
+/* drams soft toggle: a sunk pill track + a raised knob that slides. The one
+   piece of hardware in the topbar — light ↔ dark. */
 .theme-toggle {
-  width: 32px; height: 32px;
-  display: grid; place-items: center;
-  border: none;
-  border-radius: var(--r-chip);
-  background: transparent;
-  box-shadow: var(--ring);            /* hairline ring, drams-style */
-  color: var(--ink-muted);
-  cursor: pointer;
-  transition: box-shadow var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease);
+  border: none; background: none; padding: 0; cursor: pointer;
+  border-radius: var(--r-pill);
 }
-.theme-toggle:hover { color: var(--ink); box-shadow: var(--ring-hover); }
-.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.theme-icon { width: 16px; height: 16px; display: block; }
-.theme-icon svg { width: 100%; height: 100%; stroke: currentColor; fill: none; }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.t-track {
+  display: block; position: relative;
+  width: 46px; height: 26px; border-radius: var(--r-pill);
+  background: linear-gradient(180deg, var(--sunk-a, #ebeae7), var(--sunk-b, #f3f2ef));
+  box-shadow: var(--sunk);
+  transition: background var(--dur) var(--ease-soft);
+}
+.t-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #ffffff, #efeeeb 72%, #e4e3df);
+  box-shadow: var(--lift-1);
+  transition: transform var(--dur) cubic-bezier(.34,1.4,.5,1);
+}
+.theme-toggle[aria-pressed="true"] .t-knob { transform: translateX(20px); }
+.theme-toggle[aria-pressed="true"] .t-track {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 24%, #e9e8e5),
+    color-mix(in srgb, var(--accent) 14%, #f1f0ed));
+}
+:root[data-theme="dark"] .t-track { --sunk-a: #15130e; --sunk-b: #1d1a14; }
+:root[data-theme="dark"] .t-knob {
+  background: radial-gradient(circle at 36% 30%, #45413a, #2f2c24 75%, #232019);
+}
 
 /* ============================ fleet grid ============================ */
 
@@ -209,8 +235,8 @@ h1, h2 { margin: 0; }
   background: var(--surface);
   border: none;
   border-top: 2px solid var(--hue);   /* the one health stripe, drams-thin */
-  border-radius: 0 0 var(--r-card) var(--r-card);
-  box-shadow: var(--ring);            /* hairline ring does the boxing */
+  border-radius: var(--r-card);
+  box-shadow: var(--lift);            /* raised hardware, soft layered depth */
   padding: var(--s-4) var(--s-4) var(--s-4);
   display: flex;
   flex-direction: column;
@@ -221,7 +247,8 @@ h1, h2 { margin: 0; }
   cursor: pointer;
 }
 .minion:hover {
-  box-shadow: var(--ring-hover);      /* drams: hover swaps the ring to ember */
+  box-shadow: var(--lift-hover);      /* lifts toward you on hover */
+  transform: translateY(-2px);
 }
 .minion:focus-visible {
   outline: 2px solid var(--accent);
@@ -250,9 +277,11 @@ h1, h2 { margin: 0; }
 }
 
 .life-dot {
-  width: 8px; height: 8px;
+  width: 9px; height: 9px;
   border-radius: var(--r-pill);
-  background: var(--hue);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--hue) 38%, #fff), var(--hue));
+  box-shadow: 0 0 5px color-mix(in srgb, var(--hue) 60%, transparent),
+              inset 0 0 1px rgba(255,255,255,.6);
   position: relative;
   flex: none;
 }
@@ -316,27 +345,39 @@ h1, h2 { margin: 0; }
 
 .m-phase { display: flex; flex-direction: column; gap: var(--s-2); }
 
+/* the rail reads like a hardware progress strip: a sunk groove, LED nodes
+   that light as the spec advances, the current node glowing in its health hue. */
 .rail { display: flex; align-items: center; gap: 0; }
 .rail-node {
-  width: 7px; height: 7px;
+  width: 9px; height: 9px;
   border-radius: var(--r-pill);
   flex: none;
-  background: transparent;
-  border: 1.5px solid var(--rule);
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  border: none;
+  background: var(--well);            /* an empty, recessed socket */
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.22), inset 0 -1px 1px rgba(255,255,255,.4);
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.rail-node.done { background: var(--ink-faint); border-color: var(--ink-faint); }
-.rail-node.current {
-  background: var(--accent);          /* drams blue marks "here" */
-  border-color: var(--accent);
+.rail-node.done {                     /* lit, but quietly */
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--ink-faint) 55%, #fff), var(--ink-faint));
+  box-shadow: 0 0 2px color-mix(in srgb, var(--ink-faint) 40%, transparent);
+}
+.rail-node.current {                  /* the live LED — health hue, glowing */
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--hue) 42%, #fff), var(--hue));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--hue) 70%, transparent),
+              inset 0 0 1px rgba(255,255,255,.6);
 }
 .rail-link {
-  height: 1px;
+  height: 3px;
   flex: 1 1 auto;
-  background: var(--rule);
   min-width: 4px;
+  border-radius: var(--r-pill);
+  background: var(--well);            /* sunk groove between sockets */
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.18);
 }
-.rail-link.done { background: var(--ink-faint); }
+.rail-link.done {
+  background: var(--ink-faint);
+  box-shadow: none;
+}
 
 /* sentence-case phase label, tight tracking — NOT a spaced uppercase eyebrow */
 .phase-label {
@@ -376,7 +417,11 @@ h1, h2 { margin: 0; }
   flex: none;
 }
 .agent.active { color: var(--ink); }
-.agent.active .agent-pip { background: var(--hue); border-color: var(--hue); }
+.agent.active .agent-pip {
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--hue) 38%, #fff), var(--hue));
+  border-color: transparent;
+  box-shadow: 0 0 4px color-mix(in srgb, var(--hue) 55%, transparent);
+}
 
 .review-meta {
   display: flex;
@@ -732,27 +777,53 @@ h1, h2 { margin: 0; }
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  width: 100%;
+  width: calc(100% - var(--s-4));
+  margin: 2px var(--s-2);
   background: none;
   border: none;
   cursor: pointer;
-  padding: var(--s-3) var(--s-4);
+  padding: var(--s-3);
+  border-radius: var(--r-chip);
   color: var(--ink);
   font: inherit;
   text-align: left;
-  transition: color var(--dur-fast) var(--ease);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
 }
-.sb-proj-head:hover { color: var(--accent); }
+.sb-proj-head:hover {
+  color: var(--accent);
+  background: var(--surface);
+  box-shadow: var(--lift-1);          /* the row lifts off the sunk sidebar */
+}
 .sb-proj-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-.sb-caret {
-  width: 10px; height: 10px;
-  flex: none;
-  color: var(--ink-faint);
-  transition: transform var(--dur-fast) var(--ease);
+/* a tiny drams push-button instead of a chevron: domed + raised, its LED dark.
+   When the project group is open the dome presses in and the LED lights ember. */
+.sb-btn {
+  position: relative;
+  width: 16px; height: 16px; border-radius: 50%; flex: none;
+  background: linear-gradient(180deg, #fbfbfa, #e6e4df);
+  box-shadow: var(--lift-1);
+  transition: box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
-.sb-caret svg { width: 100%; height: 100%; stroke: currentColor; fill: none; }
-.sb-project.open .sb-caret { transform: rotate(90deg); }
+.sb-btn::after {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 4px; height: 4px; margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: var(--ink-faint); opacity: .5;
+  transition: background var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.sb-project.open .sb-btn {
+  box-shadow: var(--sunk);            /* pressed in */
+  transform: translateY(1px);
+}
+.sb-project.open .sb-btn::after {     /* LED lit */
+  background: var(--ember); opacity: 1;
+  box-shadow: 0 0 5px color-mix(in srgb, var(--ember) 70%, transparent);
+}
+:root[data-theme="dark"] .sb-btn { background: linear-gradient(180deg, #2c2920, #1b1813); }
 
 .sb-proj-name {
   flex: 1 1 auto;
@@ -809,9 +880,10 @@ h1, h2 { margin: 0; }
   letter-spacing: 0;
   line-height: 1;
   color: var(--accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
-  border-radius: var(--r-chip);
-  padding: 2px 5px;
+  background: var(--surface-2);
+  box-shadow: var(--lift-1), inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: var(--r-pill);
+  padding: 3px 8px;
   flex: none;
 }
 
