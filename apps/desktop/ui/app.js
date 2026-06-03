@@ -1,7 +1,7 @@
 // specdex — fleet + spec-detail. Vanilla JS, no framework, no build step.
 // Mirrors crates/core view models. Live data comes from Tauri (`fleet`,
-// `spec_detail`); when opened standalone it falls back to hardcoded samples so
-// the design/ prototype keeps working.
+// `spec_detail`); opened directly in a browser it falls back to hardcoded
+// samples so this file doubles as a standalone prototype.
 
 const PHASES = [
   "setup", "plan", "build", "review", "ship", "verify", "complete", "accepted",
@@ -34,7 +34,7 @@ const FLEET = [
     updated_at: ISO(22_000),
   },
   {
-    project: "specdex", name: "fleet-watch", phase: "plan",
+    project: "specdex", name: "fleet-watch", phase: "plan", mode: "collaborative",
     health: "idle",
     agents: [{ role: "coder", active: false }],
     pr: null, blocked_reason: null, review_round: 0, review_score: null, offset: 0,
@@ -59,7 +59,7 @@ const FLEET = [
     project: "anyformat-sdk", name: "typed-create-proxy", phase: "accepted",
     health: "done",
     agents: [],
-    pr: 3990, blocked_reason: null, review_round: 1, review_score: 5, offset: 0,
+    pr: 3990, pr_state: "merged", blocked_reason: null, review_round: 1, review_score: 5, offset: 0,
     updated_at: ISO(2 * 3600_000),
   },
 ];
@@ -71,10 +71,10 @@ function sampleDetail(project, name) {
     return {
       health: "needs-you",
       state: {
-        project, name, phase: "verify", branch: "verify-flake",
+        project, name, phase: "verify", mode: "autonomous", branch: "verify-flake",
         worktree: "~/code/anyformat-backend.worktrees/verify-flake",
         offset: 20, ports: { backend: 8020, frontend: 5193, db: 5452 },
-        pr: { number: 4012, url: "https://github.com/anyformat-ai/anyformat-backend/pull/4012" },
+        pr: { number: 4012, url: "https://github.com/anyformat-ai/anyformat-backend/pull/4012", state: "open" },
         review_round: 2, review_score: 4,
         blocked_reason: "infra flake on CI — needs a human re-run",
         last_test: { passed: 318, failed: 2 },
@@ -119,6 +119,7 @@ function sampleDetail(project, name) {
         { type: "spec.blocked", time: t(12 * 60_000), source: "dex",
           data: { reason: "infra flake on CI — needs a human re-run" } },
       ],
+      doc: "# verify-flake\n\nStabilize the flaky results-serializer test under CI load.\n\n## Acceptance Criteria\n- [ ] test passes 50× in a row locally\n- [ ] no N+1 query in the results serializer\n",
     };
   }
   // Generic calm sample for any other card.
@@ -126,10 +127,10 @@ function sampleDetail(project, name) {
   return {
     health: row.health,
     state: {
-      project, name, phase: row.phase, branch: name,
+      project, name, phase: row.phase, mode: row.mode || "autonomous", branch: name,
       worktree: "~/code/" + project + ".worktrees/" + name,
       offset: row.offset, ports: { backend: 8000 + (row.offset || 0), frontend: 5173 + (row.offset || 0) },
-      pr: row.pr ? { number: row.pr, url: "#" } : undefined,
+      pr: row.pr ? { number: row.pr, url: "#", state: row.pr_state || "open" } : undefined,
       review_round: row.review_round, review_score: row.review_score,
       blocked_reason: row.blocked_reason,
       last_test: { passed: 142, failed: 0 },
@@ -149,6 +150,25 @@ function sampleDetail(project, name) {
       { type: "note", time: ISO(10 * 60_000), source: "coder",
         data: { level: "info", topic: "status", text: "working through the " + row.phase + " step" } },
     ],
+    doc: row.mode === "collaborative"
+      ? "# " + name + "\n\nHuman-driven session — planning live with the lead.\n"
+      : null,
+  };
+}
+
+// Sample project config for the standalone prototype (no Tauri backend).
+function sampleConfig(project) {
+  if (project === "specdex") {
+    return { providers: { notifier: "none", ci: "none", pr_review: "none" }, ports: [], models: {}, phases_skip: [] };
+  }
+  return {
+    providers: { notifier: "slack", ci: "github-actions", pr_review: "greptile" },
+    ports: [
+      { service: "backend", base: 8000, env: "BACKEND_PORT" },
+      { service: "frontend", base: 5173, env: "VITE_PORT" },
+    ],
+    models: { coder: "sonnet", reviewer: "opus" },
+    phases_skip: [],
   };
 }
 
@@ -165,6 +185,8 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" stroke-width="1.9"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   terminal:
     '<svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  caret:
+    '<svg viewBox="0 0 24 24" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
 // timeline glyphs per event family
@@ -189,6 +211,23 @@ function el(tag, cls, html) {
   if (cls) n.className = cls;
   if (html != null) n.innerHTML = html;
   return n;
+}
+
+// The one chip that tells a human-driven spec apart from an autonomous minion.
+function modeBadge(mode, opts) {
+  if (mode !== "collaborative") return null;
+  const b = el("span", "mode-badge" + (opts && opts.sb ? " sb" : ""));
+  b.textContent = "collab";
+  b.title = "Collaborative — human-driven session";
+  return b;
+}
+
+// Status chip next to a PR link — only shown once it leaves "open".
+function prStateChip(state) {
+  const c = el("span", "pr-state pr-" + state);
+  c.textContent = state;
+  c.title = "PR " + state;
+  return c;
 }
 
 const isLive = (updatedAt) =>
@@ -250,20 +289,27 @@ function renderMinion(row) {
   head.appendChild(name);
 
   if (row.pr != null) {
+    const wrap = el("div", "m-pr-wrap");
     const pr = el("a", "m-pr");
     pr.textContent = "PR " + row.pr;
     pr.href = "#";
     pr.title = "Pull request #" + row.pr;
     pr.addEventListener("click", (e) => e.stopPropagation());
-    head.appendChild(pr);
+    wrap.appendChild(pr);
+    if (row.pr_state && row.pr_state !== "open") wrap.appendChild(prStateChip(row.pr_state));
+    head.appendChild(wrap);
   } else {
     head.appendChild(el("span"));
   }
 
+  const projectRow = el("div", "m-project-row");
   const project = el("span", "m-project");
   project.textContent = row.project;
   project.title = row.project;
-  head.appendChild(project);
+  projectRow.appendChild(project);
+  const badge = modeBadge(row.mode);
+  if (badge) projectRow.appendChild(badge);
+  head.appendChild(projectRow);
   card.appendChild(head);
 
   const phaseWrap = el("div", "m-phase");
@@ -316,8 +362,14 @@ function renderMinion(row) {
 
 let LAST_FLEET = [];
 
+// Sidebar state: which projects are expanded + a per-project config cache
+// (undefined = not fetched, "loading", null = none, or the Effective object).
+const SB_EXPANDED = new Set();
+const SB_CONFIG = {};
+
 function renderFleet(rows) {
   LAST_FLEET = rows || [];
+  renderSidebar(LAST_FLEET);
   const root = document.getElementById("fleet");
   root.textContent = "";
   const count = document.getElementById("fleet-count");
@@ -357,6 +409,125 @@ function tickLiveness() {
   }
 }
 
+// ============================ sidebar ============================
+// Projects (grouped from the fleet) → expand to read-only config + nested specs.
+
+function renderSidebar(rows) {
+  const root = document.getElementById("sidebar");
+  if (!root) return;
+  root.textContent = "";
+  root.appendChild(el("div", "sb-head", "Projects"));
+
+  if (!rows || rows.length === 0) {
+    root.appendChild(el("div", "sb-empty", "No projects yet.<br>Start a spec to populate the fleet."));
+    return;
+  }
+
+  const byProject = new Map();
+  [...rows]
+    .sort((a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name))
+    .forEach((r) => {
+      if (!byProject.has(r.project)) byProject.set(r.project, []);
+      byProject.get(r.project).push(r);
+    });
+
+  byProject.forEach((specs, project) => {
+    const open = SB_EXPANDED.has(project);
+    const section = el("section", "sb-project" + (open ? " open" : ""));
+    section.dataset.project = project;
+
+    const head = el("button", "sb-proj-head");
+    head.type = "button";
+    head.setAttribute("aria-expanded", open ? "true" : "false");
+    head.appendChild(el("span", "sb-caret", ICONS.caret));
+    const name = el("span", "sb-proj-name");
+    name.textContent = project;
+    name.title = project;
+    head.appendChild(name);
+    const count = el("span", "sb-proj-count");
+    count.textContent = specs.length;
+    head.appendChild(count);
+    head.addEventListener("click", () => {
+      if (SB_EXPANDED.has(project)) SB_EXPANDED.delete(project);
+      else SB_EXPANDED.add(project);
+      renderSidebar(LAST_FLEET);
+    });
+    section.appendChild(head);
+
+    if (open) {
+      const body = el("div", "sb-proj-body");
+      body.appendChild(renderConfig(project));
+      section.appendChild(body);
+      loadConfigIfNeeded(project);
+    }
+    root.appendChild(section);
+  });
+}
+
+function cfgRow(k, v) {
+  const row = el("div", "sb-cfg-row");
+  const key = el("span", "sb-cfg-key");
+  key.textContent = k;
+  const val = el("span", "sb-cfg-val");
+  val.textContent = v;
+  val.title = v;
+  row.append(key, val);
+  return row;
+}
+
+// Read-only .dex.toml summary — only the fields that are set.
+function renderConfig(project) {
+  const wrap = el("div", "sb-config");
+  const cfg = SB_CONFIG[project];
+  if (cfg === undefined || cfg === "loading") {
+    wrap.classList.add("muted");
+    wrap.appendChild(cfgRow("config", "loading…"));
+    return wrap;
+  }
+  if (cfg === null) {
+    wrap.classList.add("muted");
+    wrap.appendChild(cfgRow("config", "none"));
+    return wrap;
+  }
+  const rows = [];
+  const p = cfg.providers || {};
+  ["notifier", "ci", "pr_review", "multiplexer"].forEach((k) => {
+    if (p[k]) rows.push([k.replace("_", " "), p[k]]);
+  });
+  const m = cfg.models || {};
+  ["coder", "reviewer", "designer", "curator"].forEach((k) => { if (m[k]) rows.push([k, m[k]]); });
+  if (cfg.ports && cfg.ports.length) rows.push(["ports", cfg.ports.map((x) => x.service).join(", ")]);
+  if (cfg.phases_skip && cfg.phases_skip.length) rows.push(["skip", cfg.phases_skip.join(", ")]);
+  if (cfg.hooks && Object.keys(cfg.hooks).length) {
+    const refs = Object.values(cfg.hooks).map((a) => (a && a.ref) || a).filter(Boolean).join(", ");
+    if (refs) rows.push(["hooks", refs]);
+  }
+  if (rows.length === 0) {
+    wrap.classList.add("muted");
+    wrap.appendChild(cfgRow("config", "empty"));
+    return wrap;
+  }
+  rows.forEach(([k, v]) => wrap.appendChild(cfgRow(k, v)));
+  return wrap;
+}
+
+async function loadProjectConfig(project) {
+  const t = window.__TAURI__;
+  if (t && t.core) {
+    try { return await t.core.invoke("project_config", { project }); }
+    catch (_) { return null; }
+  }
+  return sampleConfig(project);
+}
+
+function loadConfigIfNeeded(project) {
+  if (SB_CONFIG[project] !== undefined) return; // cached, loading, or known-null
+  SB_CONFIG[project] = "loading";
+  loadProjectConfig(project)
+    .then((cfg) => { SB_CONFIG[project] = cfg || null; renderSidebar(LAST_FLEET); })
+    .catch(() => { SB_CONFIG[project] = null; renderSidebar(LAST_FLEET); });
+}
+
 // ============================ detail ============================
 
 function kv(key, valNode, opts) {
@@ -378,6 +549,7 @@ function renderState(s) {
   const panel = el("div", "d-state");
 
   if (s.branch) panel.appendChild(kv("branch", s.branch, { mono: true }));
+  if (s.mode === "collaborative") panel.appendChild(kv("mode", "collaborative"));
   if (s.offset != null) panel.appendChild(kv("port offset", "+" + s.offset, { mono: true }));
 
   if (s.ports && Object.keys(s.ports).length) {
@@ -393,6 +565,10 @@ function renderState(s) {
     a.textContent = "PR " + s.pr.number;
     if (window.__TAURI__) a.addEventListener("click", (e) => e.preventDefault());
     v.appendChild(a);
+    if (s.pr.state && s.pr.state !== "open") {
+      v.appendChild(document.createTextNode("  "));
+      v.appendChild(prStateChip(s.pr.state));
+    }
     panel.appendChild(kv("pull request", v));
   }
 
@@ -618,6 +794,9 @@ function renderDetail(detail) {
   health.appendChild(document.createTextNode(detail.health));
   titleRow.appendChild(health);
 
+  const dbadge = modeBadge(s.mode);
+  if (dbadge) titleRow.appendChild(dbadge);
+
   const attach = el("button", "d-attach");
   attach.type = "button";
   attach.innerHTML = ICONS.terminal;
@@ -638,7 +817,28 @@ function renderDetail(detail) {
 
   root.appendChild(head);
   root.appendChild(renderState(s));
+  root.appendChild(renderSpecDoc(detail.doc));
   root.appendChild(renderTimeline(detail.events || []));
+}
+
+// The spec.md design doc — read-only, plain monospace (no markdown lib).
+function renderSpecDoc(doc) {
+  const wrap = el("div", "d-spec");
+  const head = el("div", "tl-head");
+  const h2 = el("h2");
+  h2.textContent = "Spec";
+  head.appendChild(h2);
+  wrap.appendChild(head);
+
+  const body = el("pre", "spec-doc");
+  if (doc && doc.trim()) {
+    body.textContent = doc;
+  } else {
+    body.classList.add("empty");
+    body.textContent = "No spec.md for this spec.";
+  }
+  wrap.appendChild(body);
+  return wrap;
 }
 
 // ============================ routing ============================
@@ -661,14 +861,17 @@ async function loadDetail(project, name) {
 async function navigate(route) {
   if (route.view === "detail") {
     HEARTBEATS_EXPANDED = false;
+    SB_EXPANDED.add(route.project); // surface the open spec's project config
     const detail = await loadDetail(route.project, route.name);
     renderDetail(detail);
     showView("detail");
+    renderSidebar(LAST_FLEET);
     location.hash = "#/spec/" + encodeURIComponent(route.project) + "/" + encodeURIComponent(route.name);
   } else {
     showView("fleet");
     location.hash = "";
     CURRENT_DETAIL = null;
+    renderSidebar(LAST_FLEET);
   }
   window.scrollTo(0, 0);
 }
@@ -729,7 +932,7 @@ function boot() {
       }
     });
   } else {
-    renderFleet(FLEET); // standalone prototype (design/ or a plain browser)
+    renderFleet(FLEET); // standalone prototype (opened directly in a browser)
   }
 
   routeFromHash();

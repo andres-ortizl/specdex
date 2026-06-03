@@ -4,7 +4,9 @@ use std::sync::mpsc::channel;
 use std::time::Duration;
 
 use notify::{RecursiveMode, Watcher};
-use specdex_core::{fleet_snapshot, load_all, load_state, paths, read_events, FleetRow};
+use specdex_core::{
+    fleet_snapshot, load_all, load_spec_doc, load_state, paths, read_events, FleetRow,
+};
 use tauri::{AppHandle, Emitter};
 
 const STALE_SECS: i64 = 15 * 60;
@@ -22,13 +24,21 @@ fn fleet() -> Vec<FleetRow> {
     snapshot()
 }
 
-/// Full detail for one spec: snapshot state, derived health, and the event log.
+/// Full detail for one spec: snapshot state, derived health, the event log, and
+/// the spec.md design doc (if present).
 #[tauri::command]
 fn spec_detail(project: String, name: String) -> serde_json::Value {
     let state = load_state(&project, &name).ok().flatten();
     let health = state.as_ref().map(|s| s.health(chrono::Utc::now(), STALE_SECS).label().to_string());
     let events = read_events(&project, &name).unwrap_or_default();
-    serde_json::json!({ "state": state, "health": health, "events": events })
+    let doc = load_spec_doc(&project, &name).ok().flatten();
+    serde_json::json!({ "state": state, "health": health, "events": events, "doc": doc })
+}
+
+/// One project's effective `.dex.toml` config (read-only), or null if none resolves.
+#[tauri::command]
+fn project_config(project: String) -> Option<serde_json::Value> {
+    specdex_core::project_config(&project).ok().flatten().map(|c| serde_json::json!(c))
 }
 
 fn emit_fleet(handle: &AppHandle) {
@@ -37,7 +47,7 @@ fn emit_fleet(handle: &AppHandle) {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![fleet, spec_detail])
+        .invoke_handler(tauri::generate_handler![fleet, spec_detail, project_config])
         .setup(|app| {
             let handle = app.handle().clone();
             // Watch the registry off-thread; push a fresh snapshot to the webview on change.

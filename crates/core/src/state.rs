@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::event::{Payload, Phase};
+use crate::event::{Payload, Phase, PrState, SpecMode};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSnapshot {
@@ -21,6 +21,8 @@ pub struct AgentSnapshot {
 pub struct PrRef {
     pub number: u64,
     pub url: String,
+    #[serde(default)]
+    pub state: PrState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +42,8 @@ pub struct SpecState {
     pub project: String,
     pub name: String,
     pub phase: Phase,
+    #[serde(default)]
+    pub mode: SpecMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -74,6 +78,7 @@ impl SpecState {
             project,
             name,
             phase: Phase::Setup,
+            mode: SpecMode::Autonomous,
             branch: None,
             worktree: None,
             offset: None,
@@ -94,9 +99,10 @@ impl SpecState {
     pub fn apply(&mut self, p: &Payload, now: DateTime<Utc>) {
         self.updated_at = now;
         match p {
-            Payload::Init { branch, worktree } => {
+            Payload::Init { branch, worktree, mode } => {
                 self.branch = Some(branch.clone());
                 self.worktree = Some(worktree.clone());
+                self.mode = *mode;
             }
             Payload::PortsAssigned { offset, ports } => {
                 self.offset = Some(*offset);
@@ -136,8 +142,8 @@ impl SpecState {
                     self.review_score = Some(*s);
                 }
             }
-            Payload::Pr { number, url } => {
-                self.pr = Some(PrRef { number: *number, url: url.clone() });
+            Payload::Pr { number, url, state } => {
+                self.pr = Some(PrRef { number: *number, url: url.clone(), state: *state });
             }
             Payload::Note { .. } => {} // notes are append-only telemetry; no state fold
         }

@@ -280,6 +280,27 @@ h1, h2 { margin: 0; }
 }
 .m-pr:hover { border-bottom-color: var(--accent); }
 
+/* PR + its lifecycle status, kept together in the header's right cell */
+.m-pr-wrap { display: inline-flex; align-items: center; gap: 6px; justify-self: end; }
+
+.pr-state {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--r-chip);
+  flex: none;
+}
+.pr-state.pr-merged {
+  color: var(--done);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--done) 40%, transparent);
+}
+.pr-state.pr-closed {
+  color: var(--ember);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ember) 40%, transparent);
+}
+
 .m-project {
   grid-column: 2 / 4;
   font-family: var(--font-mono);
@@ -666,6 +687,167 @@ h1, h2 { margin: 0; }
 .tl-row.hb-collapsed .tl-glyph { box-shadow: inset 0 0 0 1px var(--rule-soft); color: var(--ink-faint); }
 .tl-row.hb-collapsed .tl-summary { font-size: 13px; color: var(--ink-muted); cursor: pointer; }
 .tl-row.hb-collapsed .tl-summary:hover { color: var(--accent); }
+
+/* ============================ shell + sidebar ============================ */
+/* topbar stays sticky at top; the sidebar sticks just beneath it and scrolls on
+   its own. Content (fleet/detail) scrolls with the body as before. */
+
+.shell { display: flex; align-items: flex-start; }
+
+.sidebar {
+  flex: none;
+  width: 256px;
+  align-self: stretch;
+  border-right: 1px solid var(--rule);
+  background: var(--surface-2);
+  padding: var(--s-4) 0;
+  position: sticky;
+  top: 57px;                          /* under the hairline-ruled topbar */
+  height: calc(100vh - 57px);
+  overflow-y: auto;
+}
+
+.content { flex: 1 1 auto; min-width: 0; }
+
+.sb-head {
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  color: var(--ink-faint);
+  text-transform: capitalize;
+  padding: 0 var(--s-4) var(--s-3);
+}
+
+.sb-empty {
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding: var(--s-2) var(--s-4);
+  line-height: 1.6;
+}
+
+.sb-project { border-top: 1px solid var(--rule-soft); }
+.sb-project:last-child { border-bottom: 1px solid var(--rule-soft); }
+
+.sb-proj-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--s-3) var(--s-4);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  transition: color var(--dur-fast) var(--ease);
+}
+.sb-proj-head:hover { color: var(--accent); }
+.sb-proj-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.sb-caret {
+  width: 10px; height: 10px;
+  flex: none;
+  color: var(--ink-faint);
+  transition: transform var(--dur-fast) var(--ease);
+}
+.sb-caret svg { width: 100%; height: 100%; stroke: currentColor; fill: none; }
+.sb-project.open .sb-caret { transform: rotate(90deg); }
+
+.sb-proj-name {
+  flex: 1 1 auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-proj-count {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.sb-proj-body {
+  padding: 0 var(--s-4) var(--s-3) var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+/* read-only project config (.dex.toml) */
+.sb-config {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--s-2) 0 var(--s-2) var(--s-3);
+  border-left: 1px solid var(--rule-soft);
+}
+.sb-cfg-row { display: flex; justify-content: space-between; gap: var(--s-2); }
+.sb-cfg-key { font-size: 11px; color: var(--ink-faint); flex: none; }
+.sb-cfg-val {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-config.muted { color: var(--ink-faint); }
+.sb-config.muted .sb-cfg-key { font-style: italic; }
+
+/* ============================ collaborative badge ============================ */
+/* Human-driven specs sit in the same fleet as autonomous minions; this chip is
+   the only thing that tells them apart. Drams-quiet: hairline ring, blue ink. */
+
+.mode-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: 1;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: var(--r-chip);
+  padding: 2px 5px;
+  flex: none;
+}
+
+.m-project-row {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  min-width: 0;
+}
+.m-project-row .m-project { grid-column: auto; margin-top: 0; min-width: 0; }
+
+/* ============================ spec.md panel ============================ */
+
+.d-spec { display: flex; flex-direction: column; gap: var(--s-3); }
+.spec-doc {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--sunk);
+  border-radius: var(--r-card);
+  box-shadow: var(--ring);
+  padding: var(--s-4);
+  max-height: 440px;
+  overflow: auto;
+}
+.spec-doc.empty {
+  color: var(--ink-faint);
+  font-style: italic;
+  font-family: var(--font-sans);
+}
 
 /* ============================ reduced motion ============================ */
 

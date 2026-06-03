@@ -79,6 +79,7 @@ User describes feature
 | Invocation | Mode |
 |---|---|
 | `/specdex <feature description>` | default — plan → implement → review → ship → verify |
+| `/specdex collaborate <feature>` | human-driven session: registers + badges in the fleet, skips the team/PR automation (see Collaborate) |
 | `/specdex configure` | (re)write this project's `.dex.toml` (see Configuration) |
 | `/specdex resume` | re-attach to the most recent non-terminal spec for this project |
 | `/specdex accept` | accept a COMPLETE spec → cleanup |
@@ -105,7 +106,7 @@ MODEL_REVIEWER=$(dex config get models.reviewer)   # ''  = the agent definition'
 ```
 
 - **Notify** = `notify "<msg>"` → a `curl` POST to `$DEX_NOTIFY_WEBHOOK` shaped per `$NOTIFIER` (see Notification Protocol). **No Slack/Discord MCP.** If `none` or no webhook, it's a silent no-op. Everywhere this skill says `notify "..."`, that's this.
-- **Agent models** — when spawning the coder/reviewer (Phase 2/3), pass `model: $MODEL_CODER` / `$MODEL_REVIEWER` if set; empty → the agent definition's own `model:`. Per-project model choice; set at spawn (not mid-run).
+- **Agent models** — when spawning the coder/reviewer (Build/Review), pass `model: $MODEL_CODER` / `$MODEL_REVIEWER` if set; empty → the agent definition's own `model:`. Per-project model choice; set at spawn (not mid-run).
 - **Verify** uses `$CI` + `$PR_REVIEW` and their reactors. If `pr_review = none`, skip the bot-review loop; if `ci = none`, skip CI watch.
 - **Skip phases** listed in `phases_skip` entirely (e.g. a vault that skips `verify` ships straight to COMPLETE after the PR). **Two forms, don't mix them up:** the `.dex.toml`/vault *input* is a `[phases]` table — `skip = ["verify"]` (merges across vault + project layers); the *resolved/queried* name is flat — `dex config get phases_skip`.
 - If there's no `.dex.toml`, run `/specdex configure` first (or fall back to: notifier=none, ci/pr_review=none, ship via `/pr`).
@@ -136,7 +137,8 @@ consequential SendMessage between agents also records one.** Fire-and-forget —
 | Review starts | `dex phase review` then `dex agent spawn reviewer` |
 | Each verdict | `dex review --round <N> --verdict pass\|fail\|notes --blockers <b> --issues <i>` |
 | Shipping | `dex phase ship` |
-| PR created | `dex pr --number <N> --url <url>` |
+| PR created | `dex pr --number <N> --url <url>` (state defaults to `open`) |
+| PR merged / closed | `dex pr --number <N> --url <url> --state merged\|closed` — flip once the host reports it (the UI shows a status chip next to the PR) |
 | Verify starts (CI + bot review) | `dex phase verify` |
 | Each poll cycle | `dex beat` |
 | A CI check / bot review lands | `dex gate --provider ci --name <check> --result <result>` · `dex gate --provider review --result <result> --score <0-5>` |
@@ -149,6 +151,29 @@ consequential SendMessage between agents also records one.** Fire-and-forget —
 are roles, not vendors (the config says which tool fills each).
 
 **Full `dex` command surface (every command, flag, and enum): `reference/dex-cli.md`.**
+
+## Mode: collaborate (`/specdex collaborate <feature>`)
+
+A **human-driven** session that you still want visible in the fleet. Unlike the default
+autonomous loop, you (lead) and the user drive the work directly — no coder/reviewer
+team is spawned and there is no autonomous ship/CI loop. It is tracked in the same
+registry so it appears alongside the autonomous minions, badged `collaborative`.
+
+1. Setup is lighter: you may work in a new worktree **or** directly on the current
+   checkout. Register with the collaborative flag so the fleet badges it apart:
+   `dex init --branch <branch> --worktree "$(pwd)" --collaborative`
+2. Set `DEX_SPEC` once, then emit phase events as the work actually moves
+   (`dex phase plan` → `dex phase build` → …) and `dex beat` at checkpoints so the
+   spec reads as alive. Optionally `dex agent spawn lead` to show who's driving.
+3. Save the design doc to `~/.spec/<project-name>/<spec-name>/spec.md` (same artifact
+   the autonomous loop and the desktop app read).
+4. There is no team review/PR automation — the human decides when to ship. If a PR is
+   opened, record it (`dex pr …`) and flip its state when merged (see PR state below).
+5. Reaching a natural stopping point: `dex phase complete`. Cleanup is the same
+   `/specdex accept` path.
+
+This mode does the bookkeeping that makes a hands-on session show up in the fleet — it
+does **not** run the autonomous coder/reviewer pipeline.
 
 ## Mode: configure (`/specdex configure`)
 
@@ -175,7 +200,7 @@ can't be inferred. The CLI is the typed brain; you supply the judgement.
 
 This mode does NOT run the dev loop — it only produces config. Run `/specdex <feature>` after.
 
-## Phase 0: Setup
+## Setup
 
 ### 0. Session persistence check
 
@@ -232,7 +257,7 @@ mkdir -p ~/.spec/<project-name>/<spec-name>
 
 This directory holds:
 
-- **`plan.md`** — the approved plan
+- **`spec.md`** — the approved plan
 - **`logbook.md`** — timeline of the development process
 - **`env.md`** — record of ports and project name assigned
 
@@ -274,17 +299,17 @@ See **`reference/ports.md`** for the offset-assignment algorithm and the `.env` 
 
 Create `~/.spec/<project-name>/<spec-name>/logbook.md` with the header and first entry.
 
-## Phase 1: Plan
+## Plan
 
 ### Auto-approve mode (`--auto-approve <plan-path>`)
 
 If invoked with `--auto-approve <path-to-plan-file>`, skip the interactive planning flow entirely:
 
 1. Read the plan file at the given path — it MUST already contain a Context section, files to modify, acceptance criteria, and a verification section. Callers (e.g. `sentry-fix`) are responsible for generating a valid plan before invoking spec.
-2. Copy it to `~/.spec/<project-name>/<spec-name>/plan.md`
+2. Copy it to `~/.spec/<project-name>/<spec-name>/spec.md`
 3. Do NOT enter plan mode, do NOT call ExitPlanMode, do NOT ask the user for approval
 4. Log `Plan auto-approved (source: <path>)` in the logbook
-5. Proceed directly to Phase 2
+5. Proceed directly to Build
 
 This mode exists so automated orchestrators can dispatch spec loops without requiring a human in the planning step. It is NOT available in normal interactive use.
 
@@ -297,7 +322,7 @@ The lead IS the planner. Do NOT create a planner teammate.
 3. Produce a plan for the user to review
 4. Iterate with the user until they approve
 5. Exit plan mode (ExitPlanMode)
-6. Save the approved plan to `~/.spec/<project-name>/<spec-name>/plan.md`
+6. Save the approved plan to `~/.spec/<project-name>/<spec-name>/spec.md`
 7. Log approval in `~/.spec/<project-name>/<spec-name>/logbook.md`
 
 ### Planning constraints
@@ -327,9 +352,9 @@ Rules:
 - Include happy path AND at least one edge case
 - If the user doesn't provide criteria, the planner proposes them and gets approval
 
-**Only after the user explicitly approves the plan, proceed to Phase 2.**
+**Only after the user explicitly approves the plan, proceed to Build.**
 
-## Phase 2: Create Team and Implement (Autonomous)
+## Build — Create Team & Implement (Autonomous)
 
 Create a team with two teammates, both with `mode: "bypassPermissions"` so they can run autonomously without blocking on approval prompts:
 
@@ -361,12 +386,12 @@ Send the approved plan to the coder. The coder:
 
 **If the coder reports a plan issue**, DM the user and wait for guidance.
 
-**TRANSITION → Phase 3:** When the coder SendMessages its completion report (the idle/completion notification is your cue to check the message + `coder-report.md`), confirm tests are green. If not green, SendMessage the coder to finish; don't advance. Once green, do these in order before ANY other work:
+**TRANSITION → Review:** When the coder SendMessages its completion report (the idle/completion notification is your cue to check the message + `coder-report.md`), confirm tests are green. If not green, SendMessage the coder to finish; don't advance. Once green, do these in order before ANY other work:
 1. `notify ":white_check_mark: *[<spec name>]* Implementation complete — tests passing, moving to review"`
 2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
-3. Then proceed to Phase 3
+3. Then proceed to Review
 
-## Phase 3: Review (Autonomous)
+## Review (Autonomous)
 
 Spawn the reviewer **as a persistent teammate** (it stays alive across all rounds so it has a live inbox for the coder to message — do NOT re-spawn it per round). Its spawn prompt MUST name the verdict file AND the peer protocol below. The reviewer:
 1. Reads all changed files + callers
@@ -387,25 +412,25 @@ The fix-iteration happens **peer-to-peer** to cut the lead-relay roundtrip. The 
    2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
    3. Stop and wait
 
-**TRANSITION → Phase 4:** When reviewer reports PASS, do these in order before ANY other work:
+**TRANSITION → Ship:** When reviewer reports PASS, do these in order before ANY other work:
 1. `notify ":tada: *[<spec name>]* Review passed — shipping PR"`
 2. Tell the coder AND the reviewer they can shut down (both are persistent teammates)
 3. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
-4. Then proceed to Phase 4
+4. Then proceed to Ship
 
-## Phase 4: Ship (Autonomous)
+## Ship (Autonomous)
 
 Use the `/pr` skill to:
 1. Group changes into logical commits
 2. Push to a feature branch
 3. Create a PR targeting `dev`
 
-**TRANSITION → Phase 4b:** When PR is created, do these in order before ANY other work:
+**TRANSITION → Verify:** When PR is created, do these in order before ANY other work:
 1. `notify ":link: *[<spec name>]* PR created — <PR URL>, watching CI"`
 2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
-3. Then proceed to Phase 4b
+3. Then proceed to Verify
 
-## Phase 4b: Verify — CI + bot review (Autonomous, config-driven)
+## Verify — CI + bot review (Autonomous, config-driven)
 
 **Skip this entire phase if `phases_skip` contains `verify`** (e.g. a personal vault) → go
 straight to COMPLETE. Otherwise it has two config-driven parts: **CI watch** (provider
@@ -450,7 +475,7 @@ Fix locally, commit with a clear `chore:` or `fix:` prefix, push, and loop back 
 - Integration test failures with a clear root cause
 - Migration conflicts with a new base branch commit
 
-Run `$CI_REACTOR` (the configured CI reactor skill) and/or send the failure log to the coder teammate (still alive from Phase 2/3) with a clear task description. Loop back to polling once the fix is pushed.
+Run `$CI_REACTOR` (the configured CI reactor skill) and/or send the failure log to the coder teammate (still alive from Build/Review) with a clear task description. Loop back to polling once the fix is pushed.
 
 **Bucket C — Hard or ambiguous (DM the user, then stop):**
 - Flaky/infra failures you can't reproduce (stop — don't retry blindly)
@@ -564,7 +589,7 @@ Rejection means the spec needs more iteration, NOT deletion.
 
 1. Update logbook status to `ITERATING`
 2. Log the user's feedback in `~/.spec/<project-name>/<spec-name>/logbook.md`
-3. Go back to Phase 1 (planning) — the user iterates on the plan with the new feedback
+3. Go back to Plan (planning) — the user iterates on the plan with the new feedback
 4. The worktree, docker resources, and branch all stay alive
 
 ## Error Handling / Intervention Required

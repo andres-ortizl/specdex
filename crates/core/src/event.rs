@@ -53,6 +53,27 @@ impl Phase {
     }
 }
 
+/// How a spec is driven. `Autonomous` is the fleet default (coder/reviewer team,
+/// hands-off). `Collaborative` is a human-driven session tracked in the same
+/// registry but badged apart — it may run in a worktree or directly on the main
+/// checkout, and skips the team/PR automation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SpecMode {
+    #[default]
+    Autonomous,
+    Collaborative,
+}
+
+impl SpecMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SpecMode::Autonomous => "autonomous",
+            SpecMode::Collaborative => "collaborative",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
@@ -125,6 +146,27 @@ impl GateResult {
     }
 }
 
+/// Lifecycle of the opened PR. `Open` is the default; the verify/accept phases
+/// flip it to `Merged` or `Closed` once the host (e.g. GitHub) reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PrState {
+    #[default]
+    Open,
+    Merged,
+    Closed,
+}
+
+impl PrState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PrState::Open => "open",
+            PrState::Merged => "merged",
+            PrState::Closed => "closed",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteLevel {
@@ -155,7 +197,7 @@ pub struct Event {
 /// own `data`. This is what the CLI builds from args.
 #[derive(Debug, Clone)]
 pub enum Payload {
-    Init { branch: String, worktree: String },
+    Init { branch: String, worktree: String, mode: SpecMode },
     PortsAssigned { offset: u16, ports: BTreeMap<String, u16> },
     PhaseEnter { phase: Phase, reason: Option<String> },
     Block { reason: String },
@@ -166,7 +208,7 @@ pub enum Payload {
     Test { passed: u32, failed: u32, cmd: Option<String> },
     Review { round: u32, verdict: Verdict, blockers: u32, issues: u32 },
     Gate { provider: GateProvider, name: Option<String>, result: GateResult, score: Option<u8> },
-    Pr { number: u64, url: String },
+    Pr { number: u64, url: String, state: PrState },
     Note { level: NoteLevel, topic: String, text: String },
 }
 
@@ -201,8 +243,8 @@ impl Payload {
 
     pub fn data(&self) -> Value {
         match self {
-            Payload::Init { branch, worktree } => {
-                json!({ "branch": branch, "worktree": worktree })
+            Payload::Init { branch, worktree, mode } => {
+                json!({ "branch": branch, "worktree": worktree, "mode": mode })
             }
             Payload::PortsAssigned { offset, ports } => {
                 json!({ "offset": offset, "ports": ports })
@@ -228,7 +270,9 @@ impl Payload {
             Payload::Gate { provider, name, result, score } => {
                 json!({ "provider": provider, "name": name, "result": result, "score": score })
             }
-            Payload::Pr { number, url } => json!({ "number": number, "url": url }),
+            Payload::Pr { number, url, state } => {
+                json!({ "number": number, "url": url, "state": state })
+            }
             Payload::Note { level, topic, text } => {
                 json!({ "level": level, "topic": topic, "text": text })
             }

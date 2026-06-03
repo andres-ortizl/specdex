@@ -7,7 +7,8 @@ use include_dir::{include_dir, Dir};
 use notify::{RecursiveMode, Watcher};
 use specdex_core::{
     emit, fleet_snapshot, get_dotted, load_all, load_effective, paths, pick_offset, schema,
-    validate, validate_score, GateProvider, GateResult, NoteLevel, Payload, Phase, Role, Verdict,
+    validate, validate_score, GateProvider, GateResult, NoteLevel, Payload, Phase, PrState, Role,
+    SpecMode, Verdict,
 };
 
 static SKILL_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../skill");
@@ -32,6 +33,9 @@ enum Cmd {
         branch: String,
         #[arg(long)]
         worktree: String,
+        /// Mark this as a human-driven session (badged apart from autonomous minions)
+        #[arg(long)]
+        collaborative: bool,
     },
     /// Port allocation
     Ports {
@@ -86,12 +90,14 @@ enum Cmd {
         #[arg(long)]
         score: Option<u8>,
     },
-    /// Record the opened PR
+    /// Record the PR (state: open|merged|closed — flip to merged once the host reports it)
     Pr {
         #[arg(long)]
         number: u64,
         #[arg(long)]
         url: String,
+        #[arg(long, default_value = "open")]
+        state: String,
     },
     /// Record a freeform observation (the watcher feed)
     Note {
@@ -342,7 +348,11 @@ re-run `dex install --update` to overwrite it, or remove it to let specdex manag
 
 fn build_payload(cmd: Cmd) -> Result<Payload> {
     Ok(match cmd {
-        Cmd::Init { branch, worktree } => Payload::Init { branch, worktree },
+        Cmd::Init { branch, worktree, collaborative } => Payload::Init {
+            branch,
+            worktree,
+            mode: if collaborative { SpecMode::Collaborative } else { SpecMode::Autonomous },
+        },
         Cmd::Phase { phase, reason } => Payload::PhaseEnter { phase: parse_phase(&phase)?, reason },
         Cmd::Block { reason } => Payload::Block { reason },
         Cmd::Unblock => Payload::Unblock,
@@ -371,7 +381,7 @@ fn build_payload(cmd: Cmd) -> Result<Payload> {
                 score,
             }
         }
-        Cmd::Pr { number, url } => Payload::Pr { number, url },
+        Cmd::Pr { number, url, state } => Payload::Pr { number, url, state: parse_pr_state(&state)? },
         Cmd::Note { level, topic, text } => {
             Payload::Note { level: parse_level(&level)?, topic, text }
         }
@@ -487,6 +497,15 @@ fn parse_gate_result(s: &str) -> Result<GateResult> {
         "neutral" => GateResult::Neutral,
         "pending" => GateResult::Pending,
         o => return Err(anyhow!("unknown gate result: {o}")),
+    })
+}
+
+fn parse_pr_state(s: &str) -> Result<PrState> {
+    Ok(match s {
+        "open" => PrState::Open,
+        "merged" => PrState::Merged,
+        "closed" => PrState::Closed,
+        o => return Err(anyhow!("unknown pr state: {o} (expected open|merged|closed)")),
     })
 }
 

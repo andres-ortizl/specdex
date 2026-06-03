@@ -17,9 +17,11 @@ pub struct FleetRow {
     pub project: String,
     pub name: String,
     pub phase: String,
+    pub mode: String,
     pub health: String,
     pub agents: Vec<AgentView>,
     pub pr: Option<u64>,
+    pub pr_state: Option<String>,
     pub blocked_reason: Option<String>,
     pub review_round: u32,
     pub review_score: Option<u8>,
@@ -37,7 +39,9 @@ pub fn fleet_snapshot(specs: Vec<SpecState>, now: DateTime<Utc>, stale_secs: i64
         .map(|s| {
             let health = s.health(now, stale_secs).label().to_string();
             let phase = s.phase.as_str().to_string();
-            let pr = s.pr.map(|p| p.number);
+            let mode = s.mode.as_str().to_string();
+            let pr = s.pr.as_ref().map(|p| p.number);
+            let pr_state = s.pr.as_ref().map(|p| p.state.as_str().to_string());
             let agents = s
                 .agents
                 .into_iter()
@@ -47,9 +51,11 @@ pub fn fleet_snapshot(specs: Vec<SpecState>, now: DateTime<Utc>, stale_secs: i64
                 project: s.project,
                 name: s.name,
                 phase,
+                mode,
                 health,
                 agents,
                 pr,
+                pr_state,
                 blocked_reason: s.blocked_reason,
                 review_round: s.review_round,
                 review_score: s.review_score,

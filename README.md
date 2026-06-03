@@ -1,9 +1,14 @@
-<!-- Logo goes here once generated — see "Logo" at the bottom.
-     <p align="center"><img src="docs/logo.png" alt="specdex" width="120"></p> -->
+<p align="center"><img src="docs/logo.png" alt="specdex" width="120"></p>
 
 # specdex
 
 **A Pokédex for your agent fleet.** specdex records what your autonomous AI coding runs are doing as a structured event stream, derives live state from it, and renders the whole fleet as living "minions" you can watch at a glance.
+
+<p align="center">
+  <video src="docs/demo.mp4" width="720" controls muted loop>
+    <a href="docs/demo.mp4">▶ Watch the demo</a>
+  </video>
+</p>
 
 It is the observability + control layer for the [`/specdex`](#the-specdex-loop) autonomous-development loop: many specs running at once, each in its own worktree, each driven by a coder + reviewer — and one calm place to see which one needs you.
 

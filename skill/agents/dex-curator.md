@@ -86,6 +86,6 @@ Print the report path when done.
 ## What you do NOT do
 
 - Do not modify any skill files directly — you propose changes, humans apply them
-- Do not read spec contents (plan.md, coder-report.md) unless a note explicitly references a specific issue in them
+- Do not read spec contents (spec.md, coder-report.md) unless a note explicitly references a specific issue in them
 - Do not aggregate across fewer than 2 specs — single-spec issues are for that spec's lead to handle
 - Do not produce per-spec reports — this is a global view only

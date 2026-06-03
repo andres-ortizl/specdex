@@ -17,7 +17,7 @@ export DEX_SPEC=anyformat-backend/parse-cache   # or pass -s <project>/<name> pe
 
 | Command | Effect |
 |---|---|
-| `dex init --branch <b> --worktree <path>` | register the worktree (emits `spec.created`) |
+| `dex init --branch <b> --worktree <path> [--collaborative]` | register the worktree (emits `spec.created`); `--collaborative` marks a human-driven session (badged apart from autonomous minions) |
 | `dex phase <name> [--reason <why>]` | set lifecycle phase: `setup` `plan` `build` `review` `ship` `verify` `complete` `accepted` |
 | `dex block "<reason>"` | flag the spec as blocked on the human (health → `needs-you`) |
 | `dex unblock` | clear the blocked flag |
@@ -37,7 +37,7 @@ export DEX_SPEC=anyformat-backend/parse-cache   # or pass -s <project>/<name> pe
 | `dex test --passed <P> --failed <F> [--cmd "<cmd>"]` | record a test run |
 | `dex review --round <N> --verdict <pass\|fail\|notes> [--blockers <b>] [--issues <i>]` | reviewer verdict |
 | `dex gate --provider <ci\|review> [--name <check>] --result <result> [--score <0-5>]` | a PR gate landed (`result`: `success` `failure` `cancelled` `skipped` `timed_out` `neutral` `pending`) |
-| `dex pr --number <N> --url <url>` | record the opened PR |
+| `dex pr --number <N> --url <url> [--state open\|merged\|closed]` | record the PR (state defaults to `open`; flip to `merged`/`closed` when the host reports it) |
 | `dex note --level <info\|warn\|error> --topic <topic> --text "<observation>"` | freeform signal (the curator/watcher feed) |
 
 `ci` and `review` are **roles**, not vendors — config maps them to a tool.

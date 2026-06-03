@@ -275,6 +275,17 @@ pub fn load_effective(cwd: &Path) -> Result<Effective> {
     Ok(eff)
 }
 
+/// Effective config resolved from `cwd`, or `None` when no `.dex.toml` exists
+/// walking up from `cwd`. Distinct from `load_effective`, which returns an empty
+/// (defaults-only) config when no project file is found — the UI needs to tell
+/// "this project has config" apart from "no config".
+pub fn load_effective_opt(cwd: &Path) -> Result<Option<Effective>> {
+    if find_project_file(cwd).is_none() {
+        return Ok(None);
+    }
+    load_effective(cwd).map(Some)
+}
+
 /// Skill refs this config points at (hook actions + provider reactors) — used to
 /// warn when a referenced skill isn't installed.
 pub fn referenced_skills(eff: &Effective) -> Vec<String> {
@@ -386,6 +397,20 @@ mod tests {
 
     fn effective_with_phases_skip(phases: Vec<String>) -> Effective {
         Effective { phases_skip: phases, ..Effective::default() }
+    }
+
+    #[test]
+    fn load_effective_opt_some_when_project_file_present() {
+        // The repo's own .dex.toml lives at the workspace root, above this crate.
+        let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let eff = load_effective_opt(here).unwrap();
+        assert!(eff.is_some(), "expected to resolve the repo's .dex.toml walking up");
+    }
+
+    #[test]
+    fn load_effective_opt_none_when_no_project_file() {
+        // Root has no .dex.toml and no parent — nothing to find.
+        assert!(load_effective_opt(Path::new("/")).unwrap().is_none());
     }
 
     #[test]

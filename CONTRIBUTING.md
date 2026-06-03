@@ -17,7 +17,7 @@ cargo install --path crates/cli  # install the `dex` binary
 cargo run -p specdex-desktop     # launch the desktop app
 ```
 
-The desktop frontend is vanilla HTML/CSS/JS embedded at build time (`apps/desktop/ui/`); `design/` is the same UI as a standalone, browser-openable prototype with sample data.
+The desktop frontend is vanilla HTML/CSS/JS embedded at build time (`apps/desktop/ui/`) — the single source of truth. Opened directly in a browser (no Tauri) it falls back to sample data, so it doubles as a standalone prototype. The design system lives in `apps/desktop/ui/DESIGN.md`.
 
 ## Install into your environment
 
