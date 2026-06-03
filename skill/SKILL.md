@@ -326,13 +326,13 @@ Create a team with two teammates, both with `mode: "bypassPermissions"` so they 
 
 > **Communication model — two planes.** Both teammates have `SendMessage`, so messaging is bidirectional and peer-to-peer (full mesh).
 > - **SendMessage = delivery plane** (one-to-one, needs a live recipient). Use it to cut roundtrips: coder/reviewer report to you directly, and the reviewer messages the coder its findings directly (no lead relay). This is the fast lane.
-> - **Event log = visibility plane** (one-to-many, async, durable). **Every consequential message MUST also `dex emit` a matching event** (see the Event emission section). This is the rule that keeps cutting the lead out of relays from making the lead — and your Slack scoreboard, the fleet view, the audit trail — blind. Fast lane + the record.
+> - **Event log = visibility plane** (one-to-many, async, durable). **Every consequential message MUST also record a matching event via `dex`** (see the Event emission section). This is the rule that keeps cutting the lead out of relays from making the lead — and your Slack scoreboard, the fleet view, the audit trail — blind. Fast lane + the record.
 > - **You stay the authority on phase transitions and termination.** Peers coordinate fix-rounds directly, but only YOU decide PASS→ship, max-rounds-hit→escalate, and blocked→DM. Peers iterate; lead decides. This is what prevents an endless coder↔reviewer ping-pong with no one calling it.
 > - Report **files** (`coder-report.md`, `review-round-<N>.md`) stay as the durable fallback record, but SendMessage is now the primary, immediate channel — don't poll idle-notifications-then-read-file as the main path.
 
 **IMPORTANT: Coder lifecycle management.**
 When sending the plan to the coder, include this instruction:
-> "When you finish implementation: (1) `SendMessage` me (the lead) your completion report — per-section summary + the exact test commands you ran with pass/fail counts + deviations + unverified items; (2) also WRITE the same report to `~/.spec/<project-name>/<spec-name>/coder-report.md` as the durable record; (3) `dex emit` your test result and going-idle. Then DO NOT shut down: stay alive and wait. The reviewer may `SendMessage` you findings directly — when it does, apply the fixes, re-run tests, message both me and the reviewer that you're done, overwrite `coder-report.md`, emit the new test result, and stay alive again."
+> "When you finish implementation: (1) `SendMessage` me (the lead) your completion report — per-section summary + the exact test commands you ran with pass/fail counts + deviations + unverified items; (2) also WRITE the same report to `~/.spec/<project-name>/<spec-name>/coder-report.md` as the durable record; (3) record via `dex` (`dex test --passed … --failed …`, then `dex agent idle coder`). Then DO NOT shut down: stay alive and wait. The reviewer may `SendMessage` you findings directly — when it does, apply the fixes, re-run tests, message both me and the reviewer that you're done, overwrite `coder-report.md`, emit the new test result, and stay alive again."
 
 The coder must stay alive through the review loop. Only tell it to shut down after review passes.
 
@@ -359,7 +359,7 @@ Send the approved plan to the coder. The coder:
 Spawn the reviewer **as a persistent teammate** (it stays alive across all rounds so it has a live inbox for the coder to message — do NOT re-spawn it per round). Its spawn prompt MUST name the verdict file AND the peer protocol below. The reviewer:
 1. Reads all changed files + callers
 2. Checks architecture, correctness, style; runs the affected test suites
-3. `SendMessage`s its verdict to the lead AND writes `~/.spec/<project-name>/<spec-name>/review-round-<N>.md` — first line `VERDICT: PASS | PASS WITH NOTES | FAIL`, then findings (`[BLOCKER|ISSUE|NIT] file:line — problem — fix`) — and `dex emit`s the review-verdict event.
+3. `SendMessage`s its verdict to the lead AND writes `~/.spec/<project-name>/<spec-name>/review-round-<N>.md` — first line `VERDICT: PASS | PASS WITH NOTES | FAIL`, then findings (`[BLOCKER|ISSUE|NIT] file:line — problem — fix`) — and records it via `dex review --round <N> --verdict …`.
 
 ### Review loop (coder ↔ reviewer, peer mesh):
 
