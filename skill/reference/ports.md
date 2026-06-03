@@ -1,70 +1,46 @@
-# Port and project name assignment (Phase 0.5)
+# Port assignment (Phase 0.5)
 
-Find the lowest available port offset by checking which offsets are in use by active specs across ALL projects:
+Ports are **config-driven and vendor-neutral** — the skill hardcodes no service names
+or base ports. A project declares the services it runs in `.dex.toml`; a project that
+runs nothing local (e.g. a CLI/library) declares none and this whole phase is skipped.
 
-1. Read every `~/.spec/*/*/logbook.md` — if status is NOT `COMPLETE`, that spec is active
-2. Read every active spec's `env.md` to find its offset (derive from any port, e.g., `BACKEND_PORT - 8080`)
-3. Pick the lowest multiple of 10 (starting at 10) not used by any active spec
+## Declare services in `.dex.toml`
 
-Offset 0 is reserved for the user's own dev stack (default ports).
-
-```
-offset = lowest unused multiple of 10, starting at 10
-```
-
-## Append to the worktree's `.env`
-
-```env
-COMPOSE_PROJECT_NAME=spec-<spec-name>
-FRONTEND_PORT=$((5173 + offset))
-BACKEND_PORT=$((8080 + offset))
-API_PORT=$((8081 + offset))
-POSTGRES_PORT=$((5432 + offset))
-
-# URL overrides — without these, the backend's OAuth server and the frontend's
-# baked-in API base URL still point at the default ports (8080/5173) even though
-# the containers listen on the offset ports. OAuth login from the worktree
-# frontend will redirect to the wrong backend (and the dev OAuth client may not
-# exist there). Always set these alongside the port assignments.
-BASE_URL=http://localhost:$((8080 + offset))
-VITE_BASE_URL=http://localhost:$((8080 + offset))/
-OAUTH2_REDIRECT_URIS=http://localhost:$((5173 + offset))/callback
-FRONTEND_URL=http://localhost:$((5173 + offset))
+```toml
+[[ports]]
+service = "frontend"
+base    = 5173
+env     = "VITE_PORT"     # the env var the allocated port exports as
+[[ports]]
+service = "backend"
+base    = 8080
+env     = "BACKEND_PORT"
 ```
 
-`FRONTEND_URL` drives `CORS_ALLOWED_ORIGINS` in `backend/config/settings.py` — without it the backend rejects cross-origin requests from the worktree frontend with an empty `Access-Control-Allow-Origin`, and the browser-visible failure mode is "Failed to fetch" right after the OAuth redirect.
+## Allocate
 
-**Note:** Vite env vars (`VITE_*`) are baked at build time. After changing
-`VITE_BASE_URL`, the frontend container must be rebuilt or restarted with the
-new value — a hot reload won't pick it up.
-
-**OAuth client seeding:** the worktree backend gets its own database, which
-means the dev OAuth `Application` row (`client_id=dev_...`) may not exist there
-yet. After `docker compose up`, verify with:
 ```bash
-docker compose exec backend python manage.py shell -c \
-  "from oauth2_provider.models import Application; \
-   print(list(Application.objects.values_list('client_id', flat=True)))"
+eval "$(dex ports alloc)"
 ```
-If empty, run whichever seed command the project uses (look for a
-`create_oauth_application` management command or a data migration like
-`0xxx_oauth_application_seed`).
 
-## Log the assigned ports
+`dex ports alloc` picks the **lowest offset** (multiples of 10, starting at 10 — offset
+0 is your own dev stack) such that:
+- the offset isn't reserved by another active spec (read from the registry's `state.json`s), and
+- every `base + offset` port is **actually free** (real bind-check — won't collide with a random running process).
 
-Write `~/.spec/<project-name>/<spec-name>/env.md`:
+It records a `ports.assigned` event (so the offset is reserved and the fleet view shows
+the ports) and prints `export <ENV>=<port>` lines, which `eval` loads into the worktree
+shell. Persist them into the worktree `.env` too if your stack reads from a file.
 
-```markdown
-# Environment: <spec-name>
+## URL / derived env (project-specific)
 
-Worktree: .claude/worktrees/spec/<spec-name>
-Branch: spec/<spec-name>
-COMPOSE_PROJECT_NAME: spec-<spec-name>
+Any URLs derived from ports (`BASE_URL`, OAuth redirect, CORS origin, a baked
+`VITE_BASE_URL`, etc.) are **project-specific** and belong in the project's own
+`.spec-env` / `.env` template or a `configure` step — not in this skill. Reference the
+allocated `$<ENV>` values when composing them. Remember Vite-style build-time vars need
+a container rebuild to take effect.
 
-| Service   | Port  |
-|-----------|-------|
-| Frontend  | <port> |
-| Backend   | <port> |
-| API       | <port> |
-| Postgres  | <port> |
-```
+## If `[ports]` is absent
+
+No services declared → skip allocation entirely. `dex ports alloc` prints
+`# no [ports] configured` and exits cleanly.

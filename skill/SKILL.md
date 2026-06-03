@@ -72,43 +72,97 @@ User describes feature
       COMPLETE
 ```
 
+## Modes
+
+`/spec` follows the git/gh grammar: **mode = bare verb, modifier = `--flag`, operand = positional.**
+
+| Invocation | Mode |
+|---|---|
+| `/spec <feature description>` | default — plan → implement → review → ship → verify |
+| `/spec configure` | (re)write this project's `.dex.toml` (see Configuration) |
+| `/spec resume` | re-attach to the most recent non-terminal spec for this project |
+| `/spec accept` | accept a COMPLETE spec → cleanup |
+| `/spec --auto-approve <plan-path>` | modifier on default mode (non-interactive) |
+
+`/spec` with no args lists these modes.
+
+## Configuration (config-driven — no hardcoded vendors)
+
+This skill names **no** vendor. At setup, resolve the project's integrations once via
+`dex config` and use those throughout:
+
+```bash
+NOTIFIER=$(dex config get providers.notifier)      # slack | discord | none
+CI=$(dex config get providers.ci)                  # github-actions | none
+PR_REVIEW=$(dex config get providers.pr_review)    # greptile | coderabbit | none
+CI_REACTOR=$(dex config get providers.ci.reactor)            # e.g. /react-to-pipelines
+REVIEW_REACTOR=$(dex config get providers.pr_review.reactor) # e.g. /react-to-greptile
+SHIP_ACTION=$(dex config get hooks.on_ship)        # e.g. /pr
+SKIP=$(dex config get phases_skip)                 # e.g. ["verify"]
+```
+
+- **Notify** = send to `$NOTIFIER`. If `slack`, use the Slack MCP; if `discord`, the Discord channel; if `none`, skip silently. Everywhere this skill says "notify the user", route through `$NOTIFIER` — never call Slack directly.
+- **Verify** uses `$CI` + `$PR_REVIEW` and their reactors. If `pr_review = none`, skip the bot-review loop; if `ci = none`, skip CI watch.
+- **Skip phases** in `phases_skip` entirely (e.g. a personal vault with `phases.skip = ["verify"]` ships straight to COMPLETE after the PR).
+- If there's no `.dex.toml`, run `/spec configure` first (or fall back to: notifier=none, ci/pr_review=none, ship via `/pr`).
+
 ## Event emission (dex)
 
-The `dex` CLI records a structured event stream per spec under
-`~/.spec/<project-name>/<spec-name>/` (`events.jsonl` + a derived `state.json`) —
-the machine-readable feed the fleet view and the global watcher read. It runs
-*alongside* the logbook and Slack DMs, replacing neither.
+`dex` records a structured per-spec event stream (`events.jsonl` + derived
+`state.json`) — the feed the fleet view and global watcher read. It runs *alongside*
+the logbook and notifications. **Set the spec once, then every write is a short
+resource-verb command:**
 
-**At every milestone where you log or DM, ALSO run the matching `dex emit`. And per
-the communication model, every consequential SendMessage between agents also emits.**
-Fire-and-forget: if `dex` isn't installed the call fails harmlessly — keep going.
-`<spec>` everywhere is `<project-name>/<spec-name>`.
+```bash
+export DEX_SPEC=<project-name>/<spec-name>   # do this once at setup
+```
+
+**At every milestone where you log or notify, ALSO run the matching `dex`. Every
+consequential SendMessage between agents also records one.** Fire-and-forget — if
+`dex` isn't installed the call fails harmlessly.
 
 | When | Command |
 |---|---|
-| Phase 0.5 — ports assigned | `dex emit --spec <spec> spec-created --branch spec/<spec-name> --worktree <path> --offset <N>` |
-| Phase 1 — enter plan mode | `dex emit --spec <spec> phase-enter --phase plan` |
-| Phase 2 — implementation starts | `dex emit --spec <spec> phase-enter --phase implement` |
-| Phase 2 — coder spawned | `dex emit --spec <spec> agent-spawn --role coder --agent-id <id>` |
-| Phase 2 — coder green | `dex emit --spec <spec> test-result --passed <P> --failed <F> --cmd "<cmd>"` then `dex emit --spec <spec> agent-idle --role coder` |
-| Phase 3 — review starts | `dex emit --spec <spec> phase-enter --phase review` then `dex emit --spec <spec> agent-spawn --role reviewer` |
-| Phase 3 — each verdict | `dex emit --spec <spec> review-verdict --round <N> --verdict pass\|fail\|notes --blockers <b> --issues <i>` |
-| Phase 3 — reviewer done | `dex emit --spec <spec> agent-idle --role reviewer` |
-| Phase 4 — shipping | `dex emit --spec <spec> phase-enter --phase ship` |
-| Phase 4 — PR created | `dex emit --spec <spec> pr-created --number <N> --url <url>` |
-| Phase 4b — CI watch starts | `dex emit --spec <spec> phase-enter --phase ci` |
-| Phase 4b — each poll cycle | `dex emit --spec <spec> heartbeat --phase ci` |
-| Phase 4b — a check fails/passes | `dex emit --spec <spec> ci-status --pr <N> --check <name> --conclusion <conclusion>` |
-| Phase 5 — Greptile starts | `dex emit --spec <spec> phase-enter --phase greptile` |
-| Phase 5 — each poll cycle | `dex emit --spec <spec> heartbeat --phase greptile` |
-| Phase 5 — each round | `dex emit --spec <spec> greptile-round --round <N> --score <0-5>` |
-| Any phase — blocked on the human | `dex emit --spec <spec> blocked --phase <current-phase> --reason "<why>"` |
-| COMPLETE | `dex emit --spec <spec> complete --pr-url <url>` |
-| ACCEPTED (cleanup) | `dex emit --spec <spec> accepted` |
+| Setup — worktree registered | `dex init --branch spec/<spec-name> --worktree <path>` |
+| Setup — ports (if `[ports]` configured) | `eval "$(dex ports alloc)"` — allocates a free offset + exports the port env vars |
+| Plan | `dex phase plan` |
+| Implement starts | `dex phase build` |
+| Coder spawned / idle | `dex agent spawn coder --id <id>` / `dex agent idle coder` |
+| Coder green | `dex test --passed <P> --failed <F> --cmd "<cmd>"` |
+| Review starts | `dex phase review` then `dex agent spawn reviewer` |
+| Each verdict | `dex review --round <N> --verdict pass\|fail\|notes --blockers <b> --issues <i>` |
+| Shipping | `dex phase ship` |
+| PR created | `dex pr --number <N> --url <url>` |
+| Verify starts (CI + bot review) | `dex phase verify` |
+| Each poll cycle | `dex beat` |
+| A CI check / bot review lands | `dex gate --provider ci --name <check> --result <result>` · `dex gate --provider review --result <result> --score <0-5>` |
+| Blocked on the human | `dex block "<why>"` (clear with `dex unblock`) |
+| COMPLETE / ACCEPTED | `dex phase complete` / `dex phase accepted` |
+| Skill/env feedback (any time) | `dex note --level warn --topic <topic> --text "<observation>"` |
 
-`heartbeat` distinguishes a working spec from a dead one — emit on every CI/Greptile
-poll so the fleet view can tell "alive" from "stuck". `blocked` flags a spec as
-needing you — emit whenever you stop and wait for the human.
+`beat` distinguishes a working spec from a dead one — emit on every verify poll.
+`block` flags a spec as needing you. `gate --provider` is generic: `ci` and `review`
+are roles, not vendors (the config says which tool fills each).
+
+## Mode: configure (`/spec configure`)
+
+Writes/updates this project's `.dex.toml` by exploring the repo and asking only what
+can't be inferred. The CLI is the typed brain; you supply the judgement.
+
+1. **Read the option space:** `dex config schema` — the valid providers per role, hook
+   points, phases, and the `[ports]`/authoring shape. This is your map; don't invent keys.
+2. **Explore the repo to infer:**
+   - `docker-compose.y*ml` / `Dockerfile` + a frontend (`vite`/`next`) ⇒ `[[ports]]` entries (infer service names, bases, env vars from the compose file) and `ci` likely needed.
+   - `.github/workflows/*` ⇒ `ci = "github-actions"`.
+   - `Cargo.toml` / a single binary / a library ⇒ no `[ports]`, often `ci`/`pr_review = "none"`.
+   - existing PR-bot config (`.greptile`, coderabbit yaml) ⇒ the matching `pr_review`.
+3. **Ask only the ambiguous** (`AskUserQuestion`): which `notifier` (slack/discord/none),
+   which `vault` (work/personal/…), and confirm inferred `[ports]`. Don't ask what you inferred with confidence.
+4. **Write `.dex.toml`** at the repo root (with `vault = "<name>"` if chosen).
+5. **Validate:** `dex config validate`. On error, fix and re-validate until it passes.
+6. Show the user the final `.dex.toml` + `dex config show`.
+
+This mode does NOT run the dev loop — it only produces config. Run `/spec <feature>` after.
 
 ## Phase 0: Setup
 
@@ -339,9 +393,18 @@ Use the `/pr` skill to:
 2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
 3. Then proceed to Phase 4b
 
-## Phase 4b: CI Pipeline Watch (Autonomous)
+## Phase 4b: Verify — CI + bot review (Autonomous, config-driven)
 
-After the PR is created, CI pipelines run on the PR head. Watch them and only proceed to Phase 5 once they're either all green or intentionally ignored.
+**Skip this entire phase if `phases_skip` contains `verify`** (e.g. a personal vault) → go
+straight to COMPLETE. Otherwise it has two config-driven parts: **CI watch** (provider
+`$CI`) and **bot review** (provider `$PR_REVIEW`). If a provider is `none`, skip that part.
+Always use the providers' registry reactors (`$CI_REACTOR`, `$REVIEW_REACTOR`) — never a
+hardcoded skill name. On entry `dex phase verify`; `dex beat` each poll cycle; record
+outcomes with `dex gate --provider ci|review …`.
+
+### CI watch (only if `$CI` ≠ none)
+
+After the PR is created, CI runs on the PR head. Poll until green or intentionally ignored.
 
 ### Poll
 
@@ -375,7 +438,7 @@ Fix locally, commit with a clear `chore:` or `fix:` prefix, push, and loop back 
 - Integration test failures with a clear root cause
 - Migration conflicts with a new base branch commit
 
-Send the failure log to the coder teammate (still alive from Phase 2/3) with a clear task description. Loop back to polling once the coder reports a fix pushed.
+Run `$CI_REACTOR` (the configured CI reactor skill) and/or send the failure log to the coder teammate (still alive from Phase 2/3) with a clear task description. Loop back to polling once the fix is pushed.
 
 **Bucket C — Hard or ambiguous (DM the user, then stop):**
 - Flaky/infra failures you can't reproduce (stop — don't retry blindly)
@@ -406,51 +469,41 @@ When you push a fix for a CI failure, DM the user once per round:
 
 Don't spam — one DM per push, not one per poll.
 
-### Transition to Phase 5
+Once all checks are green (or only SKIPPED/NEUTRAL), proceed to bot review.
 
-Once all checks are green (or only SKIPPED / NEUTRAL), log and proceed to Phase 5. No Slack DM needed for the transition — Phase 5 will DM when Greptile comments.
+### Bot review (only if `$PR_REVIEW` ≠ none)
 
-## Phase 5: Greptile (Autonomous)
-
-Wait for Greptile to post its review on the PR. Check periodically:
+Wait for the configured PR-review bot (`$PR_REVIEW`) to post its review:
 ```bash
 gh pr view <number> --comments
 ```
 
-Once Greptile has commented, use the `/react-to-greptile` skill to:
-1. Read all Greptile feedback
-2. Fix issues locally
-3. Push fixes
-4. Reply to every thread
-5. Tag Greptile for re-review
+Once it has commented, use **`$REVIEW_REACTOR`** (the provider's registry reactor — e.g.
+`/react-to-greptile`, `/react-to-coderabbit`) to: read feedback, fix locally, push,
+reply to every thread, re-trigger the bot. Record each round with
+`dex gate --provider review --result <pass|fail> --score <0-5>`.
 
-**Every Greptile iteration MUST produce a Slack DM — no silent rounds.** The user uses these messages as the scoreboard for the autonomous flow. Send a DM at TWO moments per round:
+**Every bot-review round MUST produce a notification — no silent rounds** (the user reads
+these as the scoreboard). Notify (via `$NOTIFIER`) at TWO moments per round:
+- **(a) verdict arrives:** round N, score X/5, findings summary, next action.
+- **(b) fixup pushed:** round N fixes pushed `<sha>`, what changed, re-triggering.
 
-**(a) When Greptile's verdict arrives** (the moment you read the new summary + score):
-```
-:robot_face: *[<spec name>]* Greptile round N — score X/5
->*Findings:* <brief list, e.g. "2 P1, 1 P2" or "no issues">
->*Next:* <fixing in branch | merging>
-```
+If a round passes on the first look, send only (a) then the final notice. If a round
+can't be fixed (coder blocked), send (a) then `dex block "<why>"` and escalate.
 
-**(b) When you push the fixup commit** for that round (the moment the new SHA is on the remote):
-```
-:wrench: *[<spec name>]* Greptile round N fixes pushed — <sha>
->*Changed:* <one-line summary of what was fixed>
->*Re-triggering Greptile for round N+1*
-```
+When the bot reaches its pass threshold → **FINAL**, before any other work:
+1. Notify via `$NOTIFIER`: "Complete — PR ready for human review: <PR URL>"
+2. `dex phase complete` and log COMPLETE in `~/.spec/<project-name>/<spec-name>/logbook.md`
 
-Both DMs are required. If a round has no findings (score 5/5 on first pass), send only the (a) DM and then the final DM below. If a round fails to produce a fix (e.g. coder blocked), send the (a) DM then escalate with the blocked DM from the error-handling section.
+## Notification Protocol (config-driven)
 
-Log each DM in `~/.spec/<project-name>/<spec-name>/logbook.md`.
-
-If score is 5/5 — **FINAL DM**, before any other work:
-1. `mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":trophy: *[<spec name>]* Complete — PR ready for human review: <PR URL>")`
-2. Log COMPLETE in `~/.spec/<project-name>/<spec-name>/logbook.md`
-
-## Slack DM Protocol
-
-Every milestone MUST send a Slack DM. See **`reference/slack.md`** for the message format, emoji table, full milestone list, Greptile round DM pattern, and the final `:trophy:` DM.
+Every milestone produces a notification **through `$NOTIFIER`** (`dex config get
+providers.notifier`) — never a hardcoded Slack call. If `slack`, use the Slack MCP; if
+`discord`, the Discord channel; if `none`, skip silently. The inline
+`mcp__claude_ai_Slack__slack_send_message(...)` snippets elsewhere in this file are
+**illustrative of message content only** — deliver via `$NOTIFIER`. See
+**`reference/slack.md`** for the message format/emoji table (applies to whichever
+notifier is configured).
 
 ## Cleanup — ACCEPTED Phase
 
