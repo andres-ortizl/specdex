@@ -103,7 +103,7 @@ SKIP=$(dex config get phases_skip)                 # e.g. ["verify"]
 
 - **Notify** = send to `$NOTIFIER`. If `slack`, use the Slack MCP; if `discord`, the Discord channel; if `none`, skip silently. Everywhere this skill says "notify the user", route through `$NOTIFIER` — never call Slack directly.
 - **Verify** uses `$CI` + `$PR_REVIEW` and their reactors. If `pr_review = none`, skip the bot-review loop; if `ci = none`, skip CI watch.
-- **Skip phases** in `phases_skip` entirely (e.g. a personal vault with `phases.skip = ["verify"]` ships straight to COMPLETE after the PR).
+- **Skip phases** listed in `phases_skip` entirely (e.g. a vault that skips `verify` ships straight to COMPLETE after the PR). **Two forms, don't mix them up:** the `.dex.toml`/vault *input* is a `[phases]` table — `skip = ["verify"]` (merges across vault + project layers); the *resolved/queried* name is flat — `dex config get phases_skip`.
 - If there's no `.dex.toml`, run `/spec configure` first (or fall back to: notifier=none, ci/pr_review=none, ship via `/pr`).
 
 ## Event emission (dex)
@@ -168,24 +168,27 @@ This mode does NOT run the dev loop — it only produces config. Run `/spec <fea
 
 ### 0. Session persistence check
 
-Check if running inside a terminal multiplexer:
+The autonomous loop must survive the terminal closing, so it should run inside a
+terminal multiplexer. Detect which one (don't assume Zellij):
 
 ```bash
-# Zellij
-test -n "$ZELLIJ_SESSION_NAME"
-# tmux
-test -n "$TMUX"
+if [ -n "$ZELLIJ_SESSION_NAME" ]; then MUX=zellij
+elif [ -n "$TMUX" ]; then MUX=tmux
+else MUX=none; fi
 ```
 
-If **neither** is set, warn the user before proceeding:
+Per-multiplexer attach / detach (use `$MUX`'s in any later "resume" instructions):
 
-> You're not inside Zellij or tmux. If you close this terminal, the autonomous loop will die. Recommended: start a Zellij session first:
-> ```
-> zellij attach spec-<spec-name>
-> ```
-> Then run `/spec` again inside it. After plan approval, detach with `Ctrl+O, D` — the loop keeps running and you'll get Slack DMs at each milestone.
+| MUX | start/attach | detach |
+|---|---|---|
+| zellij | `zellij attach spec-<spec-name>` | `Ctrl+O, D` |
+| tmux | `tmux new -s spec-<spec-name>` | `Ctrl+B, D` |
 
-Wait for the user to confirm they want to continue anyway, or exit and restart in Zellij.
+If `MUX=none`, warn before proceeding (offer whichever the user has — don't assume):
+
+> You're not inside a terminal multiplexer. If you close this terminal, the autonomous loop dies. Start one and re-run `/spec` inside it — `zellij attach spec-<spec-name>` (detach `Ctrl+O, D`) or `tmux new -s spec-<spec-name>` (detach `Ctrl+B, D`). The loop then keeps running and you'll get notifications at each milestone.
+
+Wait for the user to confirm continue-anyway, or restart inside a multiplexer.
 
 ### 0b. Discover Slack user ID and verify permissions
 
@@ -371,7 +374,7 @@ The fix-iteration happens **peer-to-peer** to cut the lead-relay roundtrip. The 
 3. The reviewer re-reviews (same live agent, new `review-round-<N+1>.md`), emits the new verdict
 4. The lead counts rounds from the verdict events. Repeat up to 3 rounds.
 5. If still failing after 3 rounds (lead decides):
-   1. `mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":rotating_light: *[<spec name>]* Blocked — review failed after 3 rounds\n>*Phase:* review\n>*Reason:* <summary of unresolved findings>\n>*Resume:* `zellij attach <session-name>`")`
+   1. `mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":rotating_light: *[<spec name>]* Blocked — review failed after 3 rounds\n>*Phase:* review\n>*Reason:* <summary of unresolved findings>\n>*Resume:* `reattach via your multiplexer (zellij attach / tmux attach) <session-name>`")`
    2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
    3. Stop and wait
 
@@ -448,7 +451,7 @@ Run `$CI_REACTOR` (the configured CI reactor skill) and/or send the failure log 
 - Any failure where you'd be guessing
 
 ```
-mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":rotating_light: *[<spec name>]* CI blocked — <check name> failing\n>*Failure:* <one-line summary>\n>*Log:* <job URL>\n>*Why stuck:* <reason you can't fix autonomously>\n>*Resume:* `zellij attach <session-name>`")
+mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":rotating_light: *[<spec name>]* CI blocked — <check name> failing\n>*Failure:* <one-line summary>\n>*Log:* <job URL>\n>*Why stuck:* <reason you can't fix autonomously>\n>*Resume:* `reattach via your multiplexer (zellij attach / tmux attach) <session-name>`")
 ```
 
 Then log in the logbook and stop. Wait for the user.
