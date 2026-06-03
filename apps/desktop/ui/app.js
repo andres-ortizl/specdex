@@ -419,6 +419,25 @@ function renderMinion(row) {
 
 let LAST_FLEET = [];
 
+// Fleet sort: "recent" (last activity), "state" (health), or "name". Persisted.
+const FLEET_SORTS = ["recent", "state", "name"];
+let FLEET_SORT = FLEET_SORTS.includes(localStorage.dexFleetSort) ? localStorage.dexFleetSort : "recent";
+// State order = activity gradient: working first, done last.
+const HEALTH_RANK = { alive: 0, "needs-you": 1, idle: 2, stale: 3, done: 4 };
+
+function sortRows(rows) {
+  const r = [...rows];
+  const recency = (a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0);
+  const byName = (a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name);
+  if (FLEET_SORT === "name") return r.sort(byName);
+  if (FLEET_SORT === "state") {
+    return r.sort(
+      (a, b) => (HEALTH_RANK[a.health] ?? 9) - (HEALTH_RANK[b.health] ?? 9) || recency(a, b) || byName(a, b)
+    );
+  }
+  return r.sort((a, b) => recency(a, b) || byName(a, b));
+}
+
 // Team panes polling (C3 / D2): runs only while the detail is open.
 let TEAM_POLL_TIMER = null;
 let TEAM_PANES_WRAP = null;
@@ -531,9 +550,7 @@ function renderFleet(rows) {
     count.textContent = "0 specs";
     return;
   }
-  const sorted = [...rows].sort(
-    (a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name)
-  );
+  const sorted = sortRows(rows);
   sorted.forEach((row, i) => {
     const card = renderMinion(row);
     card.style.animationDelay = i * 40 + "ms";
@@ -1294,11 +1311,29 @@ function initTheme() {
 
 // ============================ boot ============================
 
+function initFleetSort() {
+  const group = document.getElementById("fleet-sort");
+  if (!group) return;
+  const buttons = group.querySelectorAll("button[data-sort]");
+  const paint = () =>
+    buttons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.sort === FLEET_SORT ? "true" : "false"));
+  buttons.forEach((b) =>
+    b.addEventListener("click", () => {
+      FLEET_SORT = b.dataset.sort;
+      localStorage.dexFleetSort = FLEET_SORT;
+      paint();
+      renderFleet(LAST_FLEET);
+    })
+  );
+  paint();
+}
+
 function boot() {
   document.getElementById("brand-home").addEventListener("click", (e) => {
     e.preventDefault();
     navigate({ view: "fleet" });
   });
+  initFleetSort();
   window.addEventListener("hashchange", routeFromHash);
 
   const t = window.__TAURI__;

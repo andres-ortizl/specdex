@@ -178,6 +178,38 @@ h1, h2 { margin: 0; }
   background: var(--rule);
 }
 
+/* segmented sort control — a sunk pill, the active segment raised like the cards */
+.fleet-sort {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-pill);
+}
+.fleet-sort button {
+  appearance: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 3px 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  color: var(--ink-muted);
+  border-radius: var(--r-pill);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.fleet-sort button:hover { color: var(--ink); }
+.fleet-sort button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--lift-1);
+}
+.fleet-sort button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* drams soft toggle: a sunk pill track + a raised knob that slides. The one
    piece of hardware in the topbar — light ↔ dark. */
 .theme-toggle {
