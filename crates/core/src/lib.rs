@@ -3,17 +3,20 @@ pub mod event;
 pub mod paths;
 pub mod ports;
 pub mod state;
+pub mod terminal;
 pub mod view;
 
 pub use config::{
-    config_path, get_dotted, load_effective, load_effective_opt, reactor_for, referenced_skills,
-    schema, validate, Action, Effective, HookPoint, Identity, Models, PortSpec, Providers,
+    config_path, get_dotted, load_effective, load_effective_opt, project_file, reactor_for,
+    referenced_skills, schema, validate, Action, Effective, HookPoint, Identity, Models, PortSpec,
+    Providers, Terminal,
 };
 pub use event::{
     validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, PrState, Role,
     SpecMode, Verdict,
 };
 pub use ports::pick_offset;
+pub use terminal::attach_argv;
 pub use state::{AgentSnapshot, GateSummary, Health, PrRef, SpecState, TestSummary};
 pub use view::{fleet_snapshot, AgentView, FleetRow};
 
@@ -88,6 +91,18 @@ pub fn load_logbook(project: &str, name: &str) -> Result<Option<String>> {
     Ok(fs::read_to_string(&p).ok())
 }
 
+/// Raw text of a project's `.dex.toml`. `None` when unresolvable.
+pub fn project_config_raw(project: &str) -> Result<Option<String>> {
+    for s in load_all()?.into_iter().filter(|s| s.project == project) {
+        if let Some(wt) = s.worktree {
+            if let Some(path) = config::project_file(std::path::Path::new(&wt)) {
+                return Ok(Some(std::fs::read_to_string(path)?));
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// Resolve a project's effective config by walking up from one of its specs'
 /// worktrees to the repo `.dex.toml`. `None` when the project has no spec with a
 /// resolvable config (e.g. every worktree predates a `.dex.toml`).
@@ -128,6 +143,18 @@ pub fn load_all() -> Result<Vec<SpecState>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_config_raw_returns_none_for_unknown_project() {
+        assert!(project_config_raw("__no_such_project_xyz__").unwrap().is_none());
+    }
+
+    #[test]
+    fn project_file_resolves_repo_toml() {
+        let found = project_file(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let text = std::fs::read_to_string(&found).unwrap();
+        assert!(text.contains("[providers]") || text.contains("[identity]") || text.contains("[terminal]"));
+    }
 
     #[test]
     fn event_roundtrips_through_jsonl() {
