@@ -702,6 +702,29 @@ function loadConfigIfNeeded(project) {
 
 // ============================ detail ============================
 
+// Copy `text` to the clipboard; briefly swap `node`'s text to "copied ✓".
+function copyText(text, node, restore) {
+  const flash = () => {
+    node.classList.add("copied");
+    node.textContent = "copied ✓";
+    setTimeout(() => { node.classList.remove("copied"); node.textContent = restore; }, 1100);
+  };
+  const fallback = () => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); document.body.removeChild(ta);
+      flash();
+    } catch (_) { /* clipboard unavailable */ }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(flash).catch(fallback);
+  } else {
+    fallback();
+  }
+}
+
 function kv(key, valNode, opts) {
   const wrap = el("div", "kv" + (opts && opts.span ? " span-all" : ""));
   const k = el("span", "kv-key");
@@ -723,9 +746,11 @@ function renderState(s) {
   if (s.branch) panel.appendChild(kv("branch", s.branch, { mono: true }));
   if (s.mode === "collaborative") panel.appendChild(kv("mode", "collaborative"));
   if (s.session_id) {
-    const v = el("span", "kv-val mono");
-    v.textContent = s.session_id.length > 12 ? s.session_id.slice(0, 12) + "…" : s.session_id;
-    v.title = s.session_id;
+    const short = s.session_id.length > 12 ? s.session_id.slice(0, 12) + "…" : s.session_id;
+    const v = el("span", "kv-val mono copyable");
+    v.textContent = short;
+    v.title = "Click to copy " + s.session_id;
+    v.addEventListener("click", () => copyText(s.session_id, v, short));
     panel.appendChild(kv("session id", v));
   }
   if (s.offset != null) panel.appendChild(kv("port offset", "+" + s.offset, { mono: true }));

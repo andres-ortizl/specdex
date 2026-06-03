@@ -667,6 +667,13 @@ h1, h2 { margin: 0; }
 .kv-val .fail { color: var(--ember); }
 .kv-val.blocked { color: var(--ember); }
 .kv-val .star { color: var(--stale); margin-right: 2px; }
+.kv-val.copyable {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--rule);
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.kv-val.copyable:hover { color: var(--ink); border-bottom-color: var(--ink-faint); }
+.kv-val.copyable.copied { color: var(--alive); border-bottom-color: transparent; }
 .kv.span-all { grid-column: 1 / -1; }
 
 /* ---- event timeline ---- */
