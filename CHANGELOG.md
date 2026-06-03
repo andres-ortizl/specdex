@@ -11,7 +11,7 @@ All notable changes to specdex. Format loosely follows [Keep a Changelog](https:
 - **`dex ports alloc`** — collision-aware port-offset allocation (skips reserved offsets and bind-busy ports), prints `export` lines.
 - **`dex watch`** — streams the fleet snapshot as JSON, re-emitting on every registry change.
 - **Desktop app** (`apps/desktop`, Tauri) — live fleet of "minion" cards (breathing life-dot, phase rail, agent pips, PR badge, `needs-you` ember), light/dark, watching `~/.spec` in real time. Zen visual system derived from drams.framer.
-- **`/spec` skill rewrite** (draft, `skill/`) — config-driven and vendor-agnostic: notifications route through the configured notifier, CI + bot-review collapsed into one `verify` phase using registry reactors, honors `phases_skip`, adds a `/spec configure` mode.
+- **`/specdex` skill rewrite** (draft, `skill/`) — config-driven and vendor-agnostic: notifications route through the configured notifier, CI + bot-review collapsed into one `verify` phase using registry reactors, honors `phases_skip`, adds a `/specdex configure` mode.
 - **README**.
 
 ### Known issues

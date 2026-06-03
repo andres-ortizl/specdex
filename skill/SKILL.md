@@ -1,11 +1,11 @@
 ---
-name: spec
-description: "End-to-end feature development loop. You describe a feature, iterate on the plan, then the team implements, reviews, creates PR, and handles Greptile feedback autonomously. DMs you at milestones. Use ONLY when the user wants the full autonomous implement→review→PR→CI→Greptile loop for a multi-file feature. Do NOT use for: quick bug fixes, single-file edits, exploratory/discussion tasks, or anything the user wants to drive step-by-step."
+name: specdex
+description: "End-to-end feature development loop. You describe a feature, iterate on the plan, then the team implements, reviews, ships a PR, and handles the configured PR-review bot autonomously. Notifies you at milestones. Use ONLY when the user wants the full autonomous implement→review→PR→verify loop for a multi-file feature. Do NOT use for: quick bug fixes, single-file edits, exploratory/discussion tasks, or anything the user wants to drive step-by-step."
 triggers:
-  - spec
+  - specdex
 ---
 
-# Spec: End-to-End Feature Development
+# specdex: End-to-End Feature Development
 
 You are the lead/coordinator of a development team. You plan with the user, then create a team of agents (coder, reviewer) to drive a feature from approved plan to merged PR.
 
@@ -74,17 +74,17 @@ User describes feature
 
 ## Modes
 
-`/spec` follows the git/gh grammar: **mode = bare verb, modifier = `--flag`, operand = positional.**
+`/specdex` follows the git/gh grammar: **mode = bare verb, modifier = `--flag`, operand = positional.**
 
 | Invocation | Mode |
 |---|---|
-| `/spec <feature description>` | default — plan → implement → review → ship → verify |
-| `/spec configure` | (re)write this project's `.dex.toml` (see Configuration) |
-| `/spec resume` | re-attach to the most recent non-terminal spec for this project |
-| `/spec accept` | accept a COMPLETE spec → cleanup |
-| `/spec --auto-approve <plan-path>` | modifier on default mode (non-interactive) |
+| `/specdex <feature description>` | default — plan → implement → review → ship → verify |
+| `/specdex configure` | (re)write this project's `.dex.toml` (see Configuration) |
+| `/specdex resume` | re-attach to the most recent non-terminal spec for this project |
+| `/specdex accept` | accept a COMPLETE spec → cleanup |
+| `/specdex --auto-approve <plan-path>` | modifier on default mode (non-interactive) |
 
-`/spec` with no args lists these modes.
+`/specdex` with no args lists these modes.
 
 ## Configuration (config-driven — no hardcoded vendors)
 
@@ -107,7 +107,7 @@ MODEL_REVIEWER=$(dex config get models.reviewer)   # ''  = the agent definition'
 - **Agent models** — when spawning the coder/reviewer (Phase 2/3), pass `model: $MODEL_CODER` / `$MODEL_REVIEWER` if set; empty → the agent definition's own `model:`. Per-project model choice; set at spawn (not mid-run).
 - **Verify** uses `$CI` + `$PR_REVIEW` and their reactors. If `pr_review = none`, skip the bot-review loop; if `ci = none`, skip CI watch.
 - **Skip phases** listed in `phases_skip` entirely (e.g. a vault that skips `verify` ships straight to COMPLETE after the PR). **Two forms, don't mix them up:** the `.dex.toml`/vault *input* is a `[phases]` table — `skip = ["verify"]` (merges across vault + project layers); the *resolved/queried* name is flat — `dex config get phases_skip`.
-- If there's no `.dex.toml`, run `/spec configure` first (or fall back to: notifier=none, ci/pr_review=none, ship via `/pr`).
+- If there's no `.dex.toml`, run `/specdex configure` first (or fall back to: notifier=none, ci/pr_review=none, ship via `/pr`).
 
 ## Event emission (dex)
 
@@ -149,7 +149,7 @@ are roles, not vendors (the config says which tool fills each).
 
 **Full `dex` command surface (every command, flag, and enum): `reference/dex-cli.md`.**
 
-## Mode: configure (`/spec configure`)
+## Mode: configure (`/specdex configure`)
 
 Writes/updates this project's `.dex.toml` by exploring the repo and asking only what
 can't be inferred. The CLI is the typed brain; you supply the judgement.
@@ -167,7 +167,7 @@ can't be inferred. The CLI is the typed brain; you supply the judgement.
 5. **Validate:** `dex config validate`. On error, fix and re-validate until it passes.
 6. Show the user the final `.dex.toml` + `dex config show`.
 
-This mode does NOT run the dev loop — it only produces config. Run `/spec <feature>` after.
+This mode does NOT run the dev loop — it only produces config. Run `/specdex <feature>` after.
 
 ## Phase 0: Setup
 
@@ -191,7 +191,7 @@ Per-multiplexer attach / detach (use `$MUX`'s in any later "resume" instructions
 
 If `MUX=none`, warn before proceeding (offer whichever the user has — don't assume):
 
-> You're not inside a terminal multiplexer. If you close this terminal, the autonomous loop dies. Start one and re-run `/spec` inside it — `zellij attach spec-<spec-name>` (detach `Ctrl+O, D`) or `tmux new -s spec-<spec-name>` (detach `Ctrl+B, D`). The loop then keeps running and you'll get notifications at each milestone.
+> You're not inside a terminal multiplexer. If you close this terminal, the autonomous loop dies. Start one and re-run `/specdex` inside it — `zellij attach spec-<spec-name>` (detach `Ctrl+O, D`) or `tmux new -s spec-<spec-name>` (detach `Ctrl+B, D`). The loop then keeps running and you'll get notifications at each milestone.
 
 Wait for the user to confirm continue-anyway, or restart inside a multiplexer.
 

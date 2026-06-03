@@ -21,7 +21,7 @@ The desktop frontend is vanilla HTML/CSS/JS embedded at build time (`apps/deskto
 
 ## Install into your environment
 
-`dex install` copies the `/spec` skill + `dex-*` agents into `~/.claude` and scaffolds `~/.config/dex`. Re-run with `--update` to overwrite the skill after changes.
+`dex install` copies the `/specdex` skill + `dex-*` agents into `~/.claude` and scaffolds `~/.config/dex`. Re-run with `--update` to overwrite the skill after changes.
 
 ## App icon
 

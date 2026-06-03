@@ -6,7 +6,7 @@ specdex is built in chunks — each a self-contained, shippable slice.
 
 - **1 · Substrate** — vendor-agnostic, event-sourced core (`events.jsonl` + derived `state.json`) and the `dex` CLI.
 - **2 · Config + vaults** — typed `.dex.toml`, the `defaults ← vault ← project` merge, provider registry, `dex config`.
-- **3 · Config-driven `/spec`** — the skill rewired to read config and name no vendor; CI + bot-review collapsed into one `verify` phase; `/spec configure`. Generalized ports (`dex ports alloc`).
+- **3 · Config-driven `/specdex`** — the skill rewired to read config and name no vendor; CI + bot-review collapsed into one `verify` phase; `/specdex configure`. Generalized ports (`dex ports alloc`).
 - **4 · Desktop fleet** — the Tauri app: live "minion" cards in a zen visual system, watching `~/.spec` in real time.
 - **5 · Docs** — README, changelog, roadmap. *(logo via nano-banana — in progress)*
 

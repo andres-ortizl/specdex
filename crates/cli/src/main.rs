@@ -113,7 +113,7 @@ enum Cmd {
     },
     /// Install specdex agents, skill, and config scaffold into ~/.claude and ~/.config/dex
     Install {
-        /// Overwrite the skill even if ~/.claude/skills/spec already exists (re-sync)
+        /// Overwrite the skill even if ~/.claude/skills/specdex already exists (re-sync)
         #[arg(long)]
         update: bool,
     },
@@ -255,10 +255,10 @@ fn install(update: bool) -> Result<()> {
         agents_written += 1;
     }
 
-    let skill_dest = home.join(".claude").join("skills").join("spec");
+    let skill_dest = home.join(".claude").join("skills").join("specdex");
     if skill_dest.exists() && !update {
         println!(
-            "warning: ~/.claude/skills/spec already exists (e.g. a dotfiles symlink) — \
+            "warning: ~/.claude/skills/specdex already exists (e.g. a dotfiles symlink) — \
 re-run `dex install --update` to overwrite it, or remove it to let specdex manage the skill"
         );
     } else {

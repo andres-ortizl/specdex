@@ -2,6 +2,11 @@ vault = "personal"
 
 [providers]
 notifier = "slack"
+ci = "none"
+pr_review = "none"
+
+[phases]
+skip = ["verify"]
 
 [identity]
 github_org = "andres-ortizl"

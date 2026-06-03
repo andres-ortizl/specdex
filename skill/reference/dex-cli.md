@@ -68,7 +68,7 @@ export DEX_SPEC=anyformat-backend/parse-cache   # or pass -s <project>/<name> pe
 
 | Command | Effect |
 |---|---|
-| `dex install` | copy the `/spec` skill + `dex-*` agents into `~/.claude`, scaffold `~/.config/dex/config.toml`. Won't clobber an existing skill |
+| `dex install` | copy the `/specdex` skill + `dex-*` agents into `~/.claude`, scaffold `~/.config/dex/config.toml`. Won't clobber an existing skill |
 | `dex install --update` | same, but overwrite the skill (re-sync after changes) |
 
 ## Notes

@@ -5,13 +5,13 @@
 
 **A Pokédex for your agent fleet.** specdex records what your autonomous AI coding runs are doing as a structured event stream, derives live state from it, and renders the whole fleet as living "minions" you can watch at a glance.
 
-It is the observability + control layer for the [`/spec`](#the-spec-loop) autonomous-development loop: many specs running at once, each in its own worktree, each driven by a coder + reviewer — and one calm place to see which one needs you.
+It is the observability + control layer for the [`/specdex`](#the-specdex-loop) autonomous-development loop: many specs running at once, each in its own worktree, each driven by a coder + reviewer — and one calm place to see which one needs you.
 
 ---
 
 ## Why
 
-The `/spec` loop spins up dozens of concurrent runs. Their state used to live only as prose in `logbook.md` files — not machine-readable, no liveness, no fleet view. specdex fixes the substrate:
+The `/specdex` loop spins up dozens of concurrent runs. Their state used to live only as prose in `logbook.md` files — not machine-readable, no liveness, no fleet view. specdex fixes the substrate:
 
 - **Event-sourced.** Every run appends to a per-spec `events.jsonl`; state is always *derived*, never hand-set.
 - **Vendor-agnostic.** The core names no tool — not Slack, not Greptile, not a specific CI. It records generic facts (`gate --provider review`); *config* says which tool fills each role.
@@ -97,9 +97,9 @@ dex ports alloc          # collision-aware port offset → `export` lines
 
 The reactor/hook skills referenced by config are **external** (not bundled): `/pr` (ship), plus the configured `ci`/`pr_review` reactors (e.g. `/react-to-pipelines`, `/react-to-greptile`). Install those in `~/.claude/skills`; `dex config validate` warns if any are missing.
 
-## The `/spec` loop
+## The `/specdex` loop
 
-specdex is the substrate for the `/spec` skill (a separate agent skill, draft in `skill/`): plan → implement (coder, TDD) → review (reviewer) → ship → verify. The skill emits `dex` events at every milestone and reads `dex config` to dispatch to the configured notifier / CI / review provider — so the loop itself carries no hardcoded vendors.
+specdex is the substrate for the `/specdex` skill (a separate agent skill, draft in `skill/`): plan → implement (coder, TDD) → review (reviewer) → ship → verify. The skill emits `dex` events at every milestone and reads `dex config` to dispatch to the configured notifier / CI / review provider — so the loop itself carries no hardcoded vendors.
 
 ## Architecture
 
@@ -115,4 +115,4 @@ The event envelope is CloudEvents-flavored (`type`/`time`/`source`/`subject`/`da
 
 ## Status
 
-Early. The substrate, CLI, config, and a live desktop fleet view work. The `/spec` skill rewrite and the spec-detail screen (per-run timeline + agent view) are in progress.
+Early. The substrate, CLI, config, and a live desktop fleet view work. The `/specdex` skill rewrite and the spec-detail screen (per-run timeline + agent view) are in progress.
