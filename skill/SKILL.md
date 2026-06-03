@@ -99,9 +99,12 @@ CI_REACTOR=$(dex config get providers.ci.reactor)            # e.g. /react-to-pi
 REVIEW_REACTOR=$(dex config get providers.pr_review.reactor) # e.g. /react-to-greptile
 SHIP_ACTION=$(dex config get hooks.on_ship)        # e.g. /pr
 SKIP=$(dex config get phases_skip)                 # e.g. ["verify"]
+MODEL_CODER=$(dex config get models.coder)         # opus|sonnet|haiku|inherit ('' = agent default)
+MODEL_REVIEWER=$(dex config get models.reviewer)   # ''  = the agent definition's frontmatter model
 ```
 
-- **Notify** = send to `$NOTIFIER`. If `slack`, use the Slack MCP; if `discord`, the Discord channel; if `none`, skip silently. Everywhere this skill says "notify the user", route through `$NOTIFIER` — never call Slack directly.
+- **Notify** = `notify "<msg>"` → a `curl` POST to `$DEX_NOTIFY_WEBHOOK` shaped per `$NOTIFIER` (see Notification Protocol). **No Slack/Discord MCP.** If `none` or no webhook, it's a silent no-op. Everywhere this skill says `notify "..."`, that's this.
+- **Agent models** — when spawning the coder/reviewer (Phase 2/3), pass `model: $MODEL_CODER` / `$MODEL_REVIEWER` if set; empty → the agent definition's own `model:`. Per-project model choice; set at spawn (not mid-run).
 - **Verify** uses `$CI` + `$PR_REVIEW` and their reactors. If `pr_review = none`, skip the bot-review loop; if `ci = none`, skip CI watch.
 - **Skip phases** listed in `phases_skip` entirely (e.g. a vault that skips `verify` ships straight to COMPLETE after the PR). **Two forms, don't mix them up:** the `.dex.toml`/vault *input* is a `[phases]` table — `skip = ["verify"]` (merges across vault + project layers); the *resolved/queried* name is flat — `dex config get phases_skip`.
 - If there's no `.dex.toml`, run `/spec configure` first (or fall back to: notifier=none, ci/pr_review=none, ship via `/pr`).
@@ -143,6 +146,8 @@ consequential SendMessage between agents also records one.** Fire-and-forget —
 `beat` distinguishes a working spec from a dead one — emit on every verify poll.
 `block` flags a spec as needing you. `gate --provider` is generic: `ci` and `review`
 are roles, not vendors (the config says which tool fills each).
+
+**Full `dex` command surface (every command, flag, and enum): `reference/dex-cli.md`.**
 
 ## Mode: configure (`/spec configure`)
 
@@ -190,21 +195,17 @@ If `MUX=none`, warn before proceeding (offer whichever the user has — don't as
 
 Wait for the user to confirm continue-anyway, or restart inside a multiplexer.
 
-### 0b. Discover Slack user ID and verify permissions
+### 0b. Notifications (no MCP — plain HTTP)
 
-Get the current user's Slack ID from the MCP tool description (it includes the logged-in user's user_id). Store it as `<slack-user-id>` for all DMs in this spec.
-
-Then send the "Spec started" DM silently — do NOT ask the user before sending, just send it:
+Notifications go over a webhook with `curl` — **no Slack/Discord MCP needed.** See the
+Notification Protocol section for the `notify` definition. Send the start notice:
 
 ```
-mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":rocket: *[<spec name>]* Spec started — setting up workspace")
+notify ":rocket: *[<spec name>]* Spec started — setting up workspace"
 ```
 
-If the tool triggers a permission prompt (this is the system asking, not you), the user needs to select **"Yes, and don't ask again"**. Only then mention it:
-
-> Select "Yes, and don't ask again" so the autonomous loop can send DMs without blocking.
-
-If the DM goes through without a prompt, say nothing about it — just continue.
+If `providers.notifier = none` or `$DEX_NOTIFY_WEBHOOK` is unset, `notify` is a no-op —
+just continue silently (the `dex` event stream is still the source of truth).
 
 ### 1. Derive spec name and project name
 
@@ -340,7 +341,7 @@ When sending the plan to the coder, include this instruction:
 The coder must stay alive through the review loop. Only tell it to shut down after review passes.
 
 **ENTERING AUTONOMOUS MODE:** Before sending work to the coder, DM the user:
-1. `mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":hammer_and_wrench: *[<spec name>]* Implementation started — you can detach now (`Ctrl+O, D`). Next DM when tests pass.")`
+1. `notify ":hammer_and_wrench: *[<spec name>]* Implementation started — you can detach now (`Ctrl+O, D`). Next DM when tests pass."`
 2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
 
 Send the approved plan to the coder. The coder:
@@ -353,7 +354,7 @@ Send the approved plan to the coder. The coder:
 **If the coder reports a plan issue**, DM the user and wait for guidance.
 
 **TRANSITION → Phase 3:** When the coder SendMessages its completion report (the idle/completion notification is your cue to check the message + `coder-report.md`), confirm tests are green. If not green, SendMessage the coder to finish; don't advance. Once green, do these in order before ANY other work:
-1. `mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":white_check_mark: *[<spec name>]* Implementation complete — tests passing, moving to review")`
+1. `notify ":white_check_mark: *[<spec name>]* Implementation complete — tests passing, moving to review"`
 2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
 3. Then proceed to Phase 3
 
@@ -374,12 +375,12 @@ The fix-iteration happens **peer-to-peer** to cut the lead-relay roundtrip. The 
 3. The reviewer re-reviews (same live agent, new `review-round-<N+1>.md`), emits the new verdict
 4. The lead counts rounds from the verdict events. Repeat up to 3 rounds.
 5. If still failing after 3 rounds (lead decides):
-   1. `mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":rotating_light: *[<spec name>]* Blocked — review failed after 3 rounds\n>*Phase:* review\n>*Reason:* <summary of unresolved findings>\n>*Resume:* `reattach via your multiplexer (zellij attach / tmux attach) <session-name>`")`
+   1. `notify ":rotating_light: *[<spec name>]* Blocked — review failed after 3 rounds\n>*Phase:* review\n>*Reason:* <summary of unresolved findings>\n>*Resume:* `reattach via your multiplexer (zellij attach / tmux attach) <session-name>`"`
    2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
    3. Stop and wait
 
 **TRANSITION → Phase 4:** When reviewer reports PASS, do these in order before ANY other work:
-1. `mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":tada: *[<spec name>]* Review passed — shipping PR")`
+1. `notify ":tada: *[<spec name>]* Review passed — shipping PR"`
 2. Tell the coder AND the reviewer they can shut down (both are persistent teammates)
 3. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
 4. Then proceed to Phase 4
@@ -392,7 +393,7 @@ Use the `/pr` skill to:
 3. Create a PR targeting `dev`
 
 **TRANSITION → Phase 4b:** When PR is created, do these in order before ANY other work:
-1. `mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":link: *[<spec name>]* PR created — <PR URL>, watching CI")`
+1. `notify ":link: *[<spec name>]* PR created — <PR URL>, watching CI"`
 2. Log in `~/.spec/<project-name>/<spec-name>/logbook.md`
 3. Then proceed to Phase 4b
 
@@ -451,7 +452,7 @@ Run `$CI_REACTOR` (the configured CI reactor skill) and/or send the failure log 
 - Any failure where you'd be guessing
 
 ```
-mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":rotating_light: *[<spec name>]* CI blocked — <check name> failing\n>*Failure:* <one-line summary>\n>*Log:* <job URL>\n>*Why stuck:* <reason you can't fix autonomously>\n>*Resume:* `reattach via your multiplexer (zellij attach / tmux attach) <session-name>`")
+notify ":rotating_light: *[<spec name>]* CI blocked — <check name> failing\n>*Failure:* <one-line summary>\n>*Log:* <job URL>\n>*Why stuck:* <reason you can't fix autonomously>\n>*Resume:* `reattach via your multiplexer (zellij attach / tmux attach) <session-name>`"
 ```
 
 Then log in the logbook and stop. Wait for the user.
@@ -498,15 +499,33 @@ When the bot reaches its pass threshold → **FINAL**, before any other work:
 1. Notify via `$NOTIFIER`: "Complete — PR ready for human review: <PR URL>"
 2. `dex phase complete` and log COMPLETE in `~/.spec/<project-name>/<spec-name>/logbook.md`
 
-## Notification Protocol (config-driven)
+## Notification Protocol (config-driven, no MCP)
 
-Every milestone produces a notification **through `$NOTIFIER`** (`dex config get
-providers.notifier`) — never a hardcoded Slack call. If `slack`, use the Slack MCP; if
-`discord`, the Discord channel; if `none`, skip silently. The inline
-`mcp__claude_ai_Slack__slack_send_message(...)` snippets elsewhere in this file are
-**illustrative of message content only** — deliver via `$NOTIFIER`. See
-**`reference/slack.md`** for the message format/emoji table (applies to whichever
-notifier is configured).
+Notifications go over **plain HTTP webhooks with `curl`** — no Slack/Discord MCP
+required. Resolve once at setup:
+
+```bash
+NOTIFIER=$(dex config get providers.notifier)   # slack | discord | none
+WEBHOOK="$DEX_NOTIFY_WEBHOOK"                    # incoming-webhook URL — export in your env; keep it OUT of committed files
+```
+
+Everywhere this skill writes `notify "<message>"`, it means this shell function:
+
+```bash
+notify() {
+  { [ "$NOTIFIER" = none ] || [ -z "$WEBHOOK" ]; } && return 0
+  case "$NOTIFIER" in
+    slack)   body=$(jq -n --arg t "$1" '{text:$t}') ;;
+    discord) body=$(jq -n --arg t "$1" '{content:$t}') ;;
+    *)       return 0 ;;
+  esac
+  curl -fsS -X POST -H 'Content-Type: application/json' -d "$body" "$WEBHOOK" >/dev/null || true
+}
+```
+
+Slack incoming-webhooks and Discord webhooks both accept this. Fire-and-forget — a
+failed notification never blocks the loop. See **`reference/slack.md`** for the message
+format / emoji table (the text content; applies to any notifier).
 
 ## Cleanup — ACCEPTED Phase
 
@@ -528,7 +547,7 @@ The user must explicitly accept the spec to trigger cleanup. This happens when t
    ```
 5. DM the user:
    ```
-   mcp__claude_ai_Slack__slack_send_message(channel_id="<slack-user-id>", message=":broom: *[<spec name>]* Accepted — worktree cleaned up. PR ready to merge.")
+   notify ":broom: *[<spec name>]* Accepted — worktree cleaned up. PR ready to merge."
    ```
 
 ### If the user rejects:

@@ -7,7 +7,7 @@ pub mod view;
 
 pub use config::{
     config_path, get_dotted, load_effective, reactor_for, referenced_skills, schema, validate,
-    Action, Effective, HookPoint, Identity, PortSpec, Providers,
+    Action, Effective, HookPoint, Identity, Models, PortSpec, Providers,
 };
 pub use event::{
     validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, Role, Verdict,

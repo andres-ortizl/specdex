@@ -90,6 +90,20 @@ pub struct Identity {
     pub github_org: Option<String>,
 }
 
+/// Per-project agent model overrides (opus|sonnet|haiku|inherit). Empty → the
+/// agent definition's frontmatter default. Applied at spawn; not mid-flight.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Models {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coder: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub designer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curator: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Effective {
     #[serde(default)]
@@ -102,6 +116,8 @@ pub struct Effective {
     pub ports: Vec<PortSpec>,
     #[serde(default)]
     pub identity: Identity,
+    #[serde(default)]
+    pub models: Models,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -116,6 +132,8 @@ struct Layer {
     ports: Vec<PortSpec>,
     #[serde(default)]
     identity: Identity,
+    #[serde(default)]
+    models: Models,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -145,6 +163,12 @@ fn merge(base: Effective, over: Layer) -> Effective {
         identity: Identity {
             env_file: over.identity.env_file.or(base.identity.env_file),
             github_org: over.identity.github_org.or(base.identity.github_org),
+        },
+        models: Models {
+            coder: over.models.coder.or(base.models.coder),
+            reviewer: over.models.reviewer.or(base.models.reviewer),
+            designer: over.models.designer.or(base.models.designer),
+            curator: over.models.curator.or(base.models.curator),
         },
     }
 }
@@ -177,6 +201,19 @@ pub fn validate(eff: &Effective) -> Result<()> {
     for p in &eff.ports {
         if !seen.insert(&p.service) {
             return Err(anyhow!("duplicate port service: {}", p.service));
+        }
+    }
+    const VALID_MODELS: &[&str] = &["opus", "sonnet", "haiku", "inherit"];
+    for (role, m) in [
+        ("coder", &eff.models.coder),
+        ("reviewer", &eff.models.reviewer),
+        ("designer", &eff.models.designer),
+        ("curator", &eff.models.curator),
+    ] {
+        if let Some(m) = m {
+            if !VALID_MODELS.contains(&m.as_str()) {
+                return Err(anyhow!("invalid model for {role}: {m} (expected opus|sonnet|haiku|inherit)"));
+            }
         }
     }
     Ok(())
@@ -276,6 +313,10 @@ pub fn get_dotted(eff: &Effective, key: &str) -> Result<String> {
         "ports" => Ok(serde_json::to_string(&eff.ports)?),
         "identity.env_file" => Ok(eff.identity.env_file.clone().unwrap_or_default()),
         "identity.github_org" => Ok(eff.identity.github_org.clone().unwrap_or_default()),
+        "models.coder" => Ok(eff.models.coder.clone().unwrap_or_default()),
+        "models.reviewer" => Ok(eff.models.reviewer.clone().unwrap_or_default()),
+        "models.designer" => Ok(eff.models.designer.clone().unwrap_or_default()),
+        "models.curator" => Ok(eff.models.curator.clone().unwrap_or_default()),
         _ => Err(anyhow!("unknown config key: {key}")),
     }
 }
@@ -304,6 +345,11 @@ pub fn schema() -> serde_json::Value {
             "value": "a skill ref string (e.g. \"/pr\") or { kind = \"skill\", ref = \"/pr\" }"
         },
         "phases_skip": { "valid": VALID_PHASES },
+        "models": {
+            "roles": ["coder", "reviewer", "designer", "curator"],
+            "valid": ["opus", "sonnet", "haiku", "inherit"],
+            "note": "per-project agent model override at spawn; empty falls back to the agent definition's frontmatter"
+        },
         "ports": {
             "shape": "array of { service, base, env } tables ([[ports]])",
             "note": "service = logical name; base = base port; env = env var the allocated port exports as. A CLI project declares none."
