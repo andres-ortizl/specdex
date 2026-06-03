@@ -19,6 +19,9 @@ const REGISTRY: &[(&str, ProviderDef)] = &[
     ("greptile", ProviderDef { role: "pr_review", reactor: Some("/react-to-greptile") }),
     ("coderabbit", ProviderDef { role: "pr_review", reactor: Some("/react-to-coderabbit") }),
     ("none", ProviderDef { role: "pr_review", reactor: None }),
+    ("zellij", ProviderDef { role: "multiplexer", reactor: None }),
+    ("tmux", ProviderDef { role: "multiplexer", reactor: None }),
+    ("none", ProviderDef { role: "multiplexer", reactor: None }),
 ];
 
 fn lookup(role: &str, name: &str) -> Option<&'static ProviderDef> {
@@ -71,6 +74,8 @@ pub struct Providers {
     pub ci: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pr_review: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiplexer: Option<String>,
 }
 
 /// A service this project runs locally and the env var its allocated port exports as.
@@ -148,6 +153,7 @@ fn merge(base: Effective, over: Layer) -> Effective {
             notifier: over.providers.notifier.or(base.providers.notifier),
             ci: over.providers.ci.or(base.providers.ci),
             pr_review: over.providers.pr_review.or(base.providers.pr_review),
+            multiplexer: over.providers.multiplexer.or(base.providers.multiplexer),
         },
         hooks: {
             let mut h = base.hooks;
@@ -190,6 +196,11 @@ pub fn validate(eff: &Effective) -> Result<()> {
     if let Some(n) = &eff.providers.pr_review {
         if !valid_for_role("pr_review", n) {
             return Err(anyhow!("unknown pr_review provider: {n}"));
+        }
+    }
+    if let Some(n) = &eff.providers.multiplexer {
+        if !valid_for_role("multiplexer", n) {
+            return Err(anyhow!("unknown multiplexer provider: {n}"));
         }
     }
     for p in &eff.phases_skip {
@@ -289,6 +300,7 @@ pub fn get_dotted(eff: &Effective, key: &str) -> Result<String> {
         "providers.notifier" => Ok(eff.providers.notifier.clone().unwrap_or_default()),
         "providers.ci" => Ok(eff.providers.ci.clone().unwrap_or_default()),
         "providers.pr_review" => Ok(eff.providers.pr_review.clone().unwrap_or_default()),
+        "providers.multiplexer" => Ok(eff.providers.multiplexer.clone().unwrap_or_default()),
         "providers.pr_review.reactor" => {
             let name = eff.providers.pr_review.as_deref().unwrap_or("none");
             Ok(reactor_for("pr_review", name).unwrap_or("").to_string())
@@ -328,7 +340,7 @@ pub fn get_dotted(eff: &Effective, key: &str) -> Result<String> {
 pub fn schema() -> serde_json::Value {
     use serde_json::json;
     let mut providers = serde_json::Map::new();
-    for role in ["notifier", "ci", "pr_review"] {
+    for role in ["notifier", "ci", "pr_review", "multiplexer"] {
         let valid: Vec<&str> =
             REGISTRY.iter().filter(|(_, d)| d.role == role).map(|(n, _)| *n).collect();
         let reactors: serde_json::Map<String, serde_json::Value> = REGISTRY
@@ -382,14 +394,17 @@ mod tests {
             [providers]
             notifier = "slack"
             ci = "github-actions"
+            multiplexer = "tmux"
         "#);
         let project = parse_layer(r#"
             [providers]
             notifier = "discord"
+            multiplexer = "zellij"
         "#);
         let eff = merge_layers(vec![vault, project]);
         assert_eq!(eff.providers.notifier.as_deref(), Some("discord"));
         assert_eq!(eff.providers.ci.as_deref(), Some("github-actions"));
+        assert_eq!(eff.providers.multiplexer.as_deref(), Some("zellij"));
     }
 
     #[test]
@@ -533,6 +548,47 @@ mod tests {
         assert_eq!(pr["reactors"]["greptile"], "/react-to-greptile");
         assert_eq!(s["phases_skip"]["valid"].as_array().unwrap().len(), 8);
         assert!(s["hooks"]["points"].as_array().unwrap().iter().any(|v| v == "on_ship"));
+    }
+
+    #[test]
+    fn multiplexer_valid_passes_validation() {
+        for mux in ["zellij", "tmux", "none"] {
+            let layer = parse_layer(&format!(r#"[providers]
+multiplexer = "{mux}""#));
+            let eff = merge_layers(vec![layer]);
+            assert!(validate(&eff).is_ok(), "expected ok for multiplexer={mux}");
+        }
+    }
+
+    #[test]
+    fn unknown_multiplexer_fails_validation() {
+        let layer = parse_layer(r#"
+            [providers]
+            multiplexer = "screen"
+        "#);
+        let eff = merge_layers(vec![layer]);
+        let err = validate(&eff).unwrap_err();
+        assert!(err.to_string().contains("unknown multiplexer provider: screen"), "{err}");
+    }
+
+    #[test]
+    fn get_dotted_multiplexer() {
+        let layer = parse_layer(r#"
+            [providers]
+            multiplexer = "tmux"
+        "#);
+        let eff = merge_layers(vec![layer]);
+        assert_eq!(get_dotted(&eff, "providers.multiplexer").unwrap(), "tmux");
+    }
+
+    #[test]
+    fn schema_includes_multiplexer() {
+        let s = schema();
+        let mux = &s["providers"]["multiplexer"];
+        let valid: Vec<&str> =
+            mux["valid"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(valid.contains(&"zellij") && valid.contains(&"tmux") && valid.contains(&"none"),
+            "valid={valid:?}");
     }
 
     #[test]
