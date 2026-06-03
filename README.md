@@ -111,7 +111,3 @@ The event envelope is CloudEvents-flavored (`type`/`time`/`source`/`subject`/`da
 ## Status
 
 Early. The substrate, CLI, config/vaults, and a live desktop fleet view work. The `/spec` skill rewrite and the spec-detail screen (per-run timeline + agent view) are in progress.
-
-## Logo
-
-The logo/icon are generated with [nano banana](https://github.com/gemini-cli-extensions/nanobanana) (Gemini image gen) — see the project notes for the prompt. Drop the result at `docs/logo.png`, then `cargo tauri icon docs/logo.png` regenerates the app icon set.
