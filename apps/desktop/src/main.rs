@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use notify::{RecursiveMode, Watcher};
 use specdex_core::{
-    fleet_snapshot, load_all, load_logbook, load_spec_doc, load_state, paths, read_events,
-    FleetRow,
+    attach_argv, fleet_snapshot, load_all, load_logbook, load_spec_doc, load_state, paths,
+    read_events, FleetRow,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -43,13 +43,39 @@ fn project_config(project: String) -> Option<serde_json::Value> {
     specdex_core::project_config(&project).ok().flatten().map(|c| serde_json::json!(c))
 }
 
+/// Raw text of a project's `.dex.toml`, or null if none resolves.
+#[tauri::command]
+fn project_config_raw(project: String) -> Option<String> {
+    specdex_core::project_config_raw(&project).ok().flatten()
+}
+
+/// Open the spec's worktree in a terminal emulator via the configured provider.
+#[tauri::command]
+fn attach_terminal(project: String, name: String) -> Result<(), String> {
+    let state = specdex_core::load_state(&project, &name)
+        .ok()
+        .flatten()
+        .ok_or_else(|| format!("no state for {project}/{name}"))?;
+    let cfg = specdex_core::project_config(&project).ok().flatten();
+    let program = cfg.as_ref()
+        .and_then(|c| c.terminal.program.as_deref())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("ghostty")
+        .to_string();
+    let mux = cfg.as_ref().and_then(|c| c.providers.multiplexer.clone());
+    let session = format!("spec-{name}");
+    let argv = attach_argv(&program, mux.as_deref(), &session, state.worktree.as_deref());
+    std::process::Command::new(&argv[0]).args(&argv[1..]).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn emit_fleet(handle: &AppHandle) {
     let _ = handle.emit("fleet", snapshot());
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![fleet, spec_detail, project_config])
+        .invoke_handler(tauri::generate_handler![fleet, spec_detail, project_config, project_config_raw, attach_terminal])
         .setup(|app| {
             let handle = app.handle().clone();
             // Watch the registry off-thread; push a fresh snapshot to the webview on change.

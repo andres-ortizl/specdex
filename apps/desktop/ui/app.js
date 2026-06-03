@@ -158,20 +158,39 @@ function sampleDetail(project, name) {
   };
 }
 
-// Sample project config for the standalone prototype (no Tauri backend).
-function sampleConfig(project) {
+function sampleConfigRaw(project) {
   if (project === "specdex") {
-    return { providers: { notifier: "none", ci: "none", pr_review: "none" }, ports: [], models: {}, phases_skip: [] };
+    return `[providers]
+notifier = "none"
+ci = "none"
+pr_review = "none"
+
+[terminal]
+program = "ghostty"
+
+[identity]
+github_org = "andres-ortizl"
+`;
   }
-  return {
-    providers: { notifier: "slack", ci: "github-actions", pr_review: "greptile" },
-    ports: [
-      { service: "backend", base: 8000, env: "BACKEND_PORT" },
-      { service: "frontend", base: 5173, env: "VITE_PORT" },
-    ],
-    models: { coder: "sonnet", reviewer: "opus" },
-    phases_skip: [],
-  };
+  return `[providers]
+notifier = "slack"
+ci = "github-actions"
+pr_review = "greptile"
+
+[models]
+coder = "sonnet"
+reviewer = "opus"
+
+[[ports]]
+service = "backend"
+base = 8000
+env = "BACKEND_PORT"
+
+[[ports]]
+service = "frontend"
+base = 5173
+env = "VITE_PORT"
+`;
 }
 
 const ICONS = {
@@ -374,10 +393,10 @@ function renderMinion(row) {
 
 let LAST_FLEET = [];
 
-// Sidebar state: which projects are expanded + a per-project config cache
-// (undefined = not fetched, "loading", null = none, or the Effective object).
+// Sidebar state: which projects are expanded + per-project raw-toml cache.
+// SB_TOML: undefined = not fetched, "loading", null = none, or raw toml string.
 const SB_EXPANDED = new Set();
-const SB_CONFIG = {};
+const SB_TOML = {};
 
 function renderFleet(rows) {
   LAST_FLEET = rows || [];
@@ -470,74 +489,58 @@ function renderSidebar(rows) {
       const body = el("div", "sb-proj-body");
       body.appendChild(renderConfig(project));
       section.appendChild(body);
-      loadConfigIfNeeded(project);
+      loadTomlIfNeeded(project);
     }
     root.appendChild(section);
   });
 }
 
-function cfgRow(k, v) {
-  const row = el("div", "sb-cfg-row");
-  const key = el("span", "sb-cfg-key");
-  key.textContent = k;
-  const val = el("span", "sb-cfg-val");
-  val.textContent = v;
-  val.title = v;
-  row.append(key, val);
-  return row;
+function hlToml(raw) {
+  const esc = raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return esc.split("\n").map((line) => {
+    if (/^\s*#/.test(line)) return `<span class="tk-comment">${line}</span>`;
+    if (/^\s*\[/.test(line)) return `<span class="tk-section">${line}</span>`;
+    return line
+      .replace(/^(\s*[\w.-]+\s*=\s*)/, '<span class="tk-key">$1</span>')
+      .replace(/"([^"]*)"/g, '"<span class="tk-str">$1</span>"');
+  }).join("\n");
 }
 
-// Read-only .dex.toml summary — only the fields that are set.
 function renderConfig(project) {
-  const wrap = el("div", "sb-config");
-  const cfg = SB_CONFIG[project];
-  if (cfg === undefined || cfg === "loading") {
-    wrap.classList.add("muted");
-    wrap.appendChild(cfgRow("config", "loading…"));
+  const toml = SB_TOML[project];
+  if (toml === undefined || toml === "loading") {
+    const wrap = el("div", "sb-config muted");
+    wrap.textContent = "loading…";
     return wrap;
   }
-  if (cfg === null) {
-    wrap.classList.add("muted");
-    wrap.appendChild(cfgRow("config", "none"));
+  if (!toml) {
+    const wrap = el("div", "sb-config muted");
+    wrap.textContent = "none";
     return wrap;
   }
-  const rows = [];
-  const p = cfg.providers || {};
-  ["notifier", "ci", "pr_review", "multiplexer"].forEach((k) => {
-    if (p[k]) rows.push([k.replace("_", " "), p[k]]);
-  });
-  const m = cfg.models || {};
-  ["coder", "reviewer", "designer", "curator"].forEach((k) => { if (m[k]) rows.push([k, m[k]]); });
-  if (cfg.ports && cfg.ports.length) rows.push(["ports", cfg.ports.map((x) => x.service).join(", ")]);
-  if (cfg.phases_skip && cfg.phases_skip.length) rows.push(["skip", cfg.phases_skip.join(", ")]);
-  if (cfg.hooks && Object.keys(cfg.hooks).length) {
-    const refs = Object.values(cfg.hooks).map((a) => (a && a.ref) || a).filter(Boolean).join(", ");
-    if (refs) rows.push(["hooks", refs]);
-  }
-  if (rows.length === 0) {
-    wrap.classList.add("muted");
-    wrap.appendChild(cfgRow("config", "empty"));
-    return wrap;
-  }
-  rows.forEach(([k, v]) => wrap.appendChild(cfgRow(k, v)));
-  return wrap;
+  const pre = el("pre", "sb-toml");
+  pre.innerHTML = hlToml(toml);
+  return pre;
 }
 
-async function loadProjectConfig(project) {
+async function loadProjectConfigRaw(project) {
   const t = window.__TAURI__;
   if (t && t.core) {
-    try { return await t.core.invoke("project_config", { project }); }
+    try { return await t.core.invoke("project_config_raw", { project }); }
     catch (_) { return null; }
   }
-  return sampleConfig(project);
+  return sampleConfigRaw(project);
 }
 
-function loadConfigIfNeeded(project) {
-  if (SB_CONFIG[project] !== undefined) return; // cached, loading, or known-null
-  SB_CONFIG[project] = "loading";
-  loadProjectConfig(project)
-    .then((cfg) => { SB_CONFIG[project] = cfg || null; renderSidebar(LAST_FLEET); })
-    .catch(() => { SB_CONFIG[project] = null; renderSidebar(LAST_FLEET); });
+function loadTomlIfNeeded(project) {
+  if (SB_TOML[project] !== undefined) return;
+  SB_TOML[project] = "loading";
+  loadProjectConfigRaw(project)
+    .then((raw) => { SB_TOML[project] = raw || null; renderSidebar(LAST_FLEET); })
+    .catch(() => { SB_TOML[project] = null; renderSidebar(LAST_FLEET); });
 }
 
 // ============================ detail ============================
@@ -822,9 +825,19 @@ function renderDetail(detail) {
   attach.type = "button";
   attach.innerHTML = ICONS.terminal;
   attach.appendChild(document.createTextNode("attach in terminal"));
-  attach.title = "dex attach " + s.name + "  (coming soon)";
   attach.addEventListener("click", () => {
-    attach.lastChild.textContent = "dex attach " + s.name;
+    const t = window.__TAURI__;
+    if (t && t.core) {
+      attach.lastChild.textContent = "attaching…";
+      t.core.invoke("attach_terminal", { project: s.project, name: s.name })
+        .then(() => { attach.lastChild.textContent = "attach in terminal"; })
+        .catch(() => {
+          attach.lastChild.textContent = "attach failed";
+          setTimeout(() => { attach.lastChild.textContent = "attach in terminal"; }, 2000);
+        });
+    } else {
+      attach.lastChild.textContent = "dex attach " + s.name;
+    }
   });
   titleRow.appendChild(attach);
   head.appendChild(titleRow);
@@ -867,22 +880,160 @@ function renderDetailPanel(detail) {
   wrap.appendChild(tabs);
 
   if (DETAIL_TAB === "events") wrap.appendChild(renderTimeline(detail.events || []));
-  else if (DETAIL_TAB === "spec") wrap.appendChild(renderDoc(detail.doc, "No spec.md for this spec."));
-  else wrap.appendChild(renderDoc(detail.logbook, "No logbook.md for this spec."));
+  else if (DETAIL_TAB === "spec") {
+    if (detail.doc && detail.doc.trim()) wrap.appendChild(renderMarkdown(detail.doc));
+    else { const p = el("p", "md-empty"); p.textContent = "No spec.md for this spec."; wrap.appendChild(p); }
+  } else {
+    if (detail.logbook && detail.logbook.trim()) wrap.appendChild(renderMarkdown(detail.logbook));
+    else { const p = el("p", "md-empty"); p.textContent = "No logbook.md for this spec."; wrap.appendChild(p); }
+  }
 
   return wrap;
 }
 
-// A read-only markdown file — plain monospace, no markdown lib.
-function renderDoc(doc, emptyMsg) {
-  const body = el("pre", "spec-doc");
-  if (doc && doc.trim()) {
-    body.textContent = doc;
-  } else {
-    body.classList.add("empty");
-    body.textContent = emptyMsg;
+function renderMarkdown(text) {
+  const div = el("div", "md-doc");
+  if (!text || !text.trim()) return div;
+
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escAttr = (s) => esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const safeUrl = (url) => /^(https?:|mailto:|\/|#|\.)/.test(url) || !url.includes(":");
+
+  const inlineSpans = (s) =>
+    esc(s)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, url) => {
+        if (!safeUrl(url)) return txt;
+        const guard = window.__TAURI__ ? ' onclick="event.preventDefault()"' : "";
+        return `<a href="${escAttr(url)}"${guard}>${txt}</a>`;
+      });
+
+  const lines = text.split("\n");
+  let i = 0;
+  let listStack = [];
+
+  const flushLists = () => {
+    while (listStack.length) {
+      div.appendChild(listStack.pop());
+    }
+  };
+
+  const getOrCreateList = (tag) => {
+    if (listStack.length && listStack[listStack.length - 1].tagName.toLowerCase() === tag) {
+      return listStack[listStack.length - 1];
+    }
+    flushLists();
+    const lst = document.createElement(tag);
+    listStack.push(lst);
+    return lst;
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    const fenceMatch = line.match(/^```/);
+    if (fenceMatch) {
+      flushLists();
+      i++;
+      const codeLines = [];
+      while (i < lines.length && !lines[i].match(/^```/)) {
+        codeLines.push(esc(lines[i]));
+        i++;
+      }
+      i++;
+      const pre = document.createElement("pre");
+      const code = document.createElement("code");
+      code.innerHTML = codeLines.join("\n");
+      pre.appendChild(code);
+      div.appendChild(pre);
+      continue;
+    }
+
+    const hMatch = line.match(/^(#{1,6})\s+(.*)/);
+    if (hMatch) {
+      flushLists();
+      const level = hMatch[1].length;
+      const h = document.createElement("h" + level);
+      h.innerHTML = inlineSpans(hMatch[2]);
+      div.appendChild(h);
+      i++;
+      continue;
+    }
+
+    if (/^---+$|^\*\*\*+$/.test(line)) {
+      flushLists();
+      div.appendChild(document.createElement("hr"));
+      i++;
+      continue;
+    }
+
+    const bqMatch = line.match(/^>\s?(.*)/);
+    if (bqMatch) {
+      flushLists();
+      const bq = document.createElement("blockquote");
+      const p = document.createElement("p");
+      p.innerHTML = inlineSpans(bqMatch[1]);
+      bq.appendChild(p);
+      div.appendChild(bq);
+      i++;
+      continue;
+    }
+
+    const taskMatch = line.match(/^[-*]\s+\[([ xX])\]\s+(.*)/);
+    if (taskMatch) {
+      const lst = getOrCreateList("ul");
+      const li = document.createElement("li");
+      li.className = "task-item";
+      const checked = taskMatch[1].toLowerCase() === "x";
+      li.innerHTML = `<span class="task-box">${checked ? "☑" : "☐"}</span> ${inlineSpans(taskMatch[2])}`;
+      lst.appendChild(li);
+      i++;
+      continue;
+    }
+
+    const ulMatch = line.match(/^[-*]\s+(.*)/);
+    if (ulMatch) {
+      const lst = getOrCreateList("ul");
+      const li = document.createElement("li");
+      li.innerHTML = inlineSpans(ulMatch[1]);
+      lst.appendChild(li);
+      i++;
+      continue;
+    }
+
+    const olMatch = line.match(/^\d+\.\s+(.*)/);
+    if (olMatch) {
+      const lst = getOrCreateList("ol");
+      const li = document.createElement("li");
+      li.innerHTML = inlineSpans(olMatch[1]);
+      lst.appendChild(li);
+      i++;
+      continue;
+    }
+
+    if (line.trim() === "") {
+      flushLists();
+      i++;
+      continue;
+    }
+
+    flushLists();
+    const paraLines = [];
+    while (i < lines.length && lines[i].trim() !== "" && !lines[i].match(/^(#{1,6}\s|```|---+|\*\*\*+|>|[-*]\s|\d+\.\s)/)) {
+      paraLines.push(lines[i]);
+      i++;
+    }
+    if (paraLines.length) {
+      const p = document.createElement("p");
+      p.innerHTML = paraLines.map(inlineSpans).join("<br>");
+      div.appendChild(p);
+    }
   }
-  return body;
+
+  flushLists();
+  return div;
 }
 
 // ============================ routing ============================
