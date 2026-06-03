@@ -1,9 +1,12 @@
+use std::sync::mpsc::channel;
+
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use clap::{Parser, Subcommand};
+use notify::{RecursiveMode, Watcher};
 use specdex_core::{
-    emit, get_dotted, load_all, load_effective, pick_offset, schema, validate, validate_score,
-    GateProvider, GateResult, NoteLevel, Payload, Phase, Role, Verdict,
+    emit, fleet_snapshot, get_dotted, load_all, load_effective, paths, pick_offset, schema,
+    validate, validate_score, GateProvider, GateResult, NoteLevel, Payload, Phase, Role, Verdict,
 };
 
 /// Resource-verb CLI. The target spec is ambient: set `DEX_SPEC=<project>/<name>`
@@ -98,6 +101,8 @@ enum Cmd {
     },
     /// List every spec in the fleet with derived health
     Ls,
+    /// Stream the fleet snapshot as JSON, re-emitting on every registry change
+    Watch,
     /// Inspect merged effective config
     Config {
         #[command(subcommand)]
@@ -139,6 +144,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Ls => return ls(),
+        Cmd::Watch => return watch(),
         Cmd::Config { ref op } => return config_cmd(op),
         _ => {}
     }
@@ -249,32 +255,57 @@ fn build_payload(cmd: Cmd) -> Result<Payload> {
         Cmd::Note { level, topic, text } => {
             Payload::Note { level: parse_level(&level)?, topic, text }
         }
-        Cmd::Ls | Cmd::Config { .. } | Cmd::Ports { .. } => {
+        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } => {
             unreachable!("handled before payload build")
         }
     })
 }
 
+const STALE_SECS: i64 = 15 * 60;
+
 fn ls() -> Result<()> {
-    let now = Utc::now();
-    let mut specs = load_all()?;
-    specs.sort_by(|a, b| a.project.cmp(&b.project).then(a.name.cmp(&b.name)));
-    if specs.is_empty() {
+    let rows = fleet_snapshot(load_all()?, Utc::now(), STALE_SECS);
+    if rows.is_empty() {
         println!("No specs with state.json yet — run `dex …` from the /spec skill.");
         return Ok(());
     }
     println!("{:<22} {:<28} {:<10} {:<10} PR", "PROJECT", "SPEC", "PHASE", "HEALTH");
-    for s in specs {
-        let health = s.health(now, 15 * 60);
-        let pr = s.pr.as_ref().map(|p| format!("#{}", p.number)).unwrap_or_default();
+    for r in rows {
+        let pr = r.pr.map(|n| format!("#{n}")).unwrap_or_default();
         println!(
             "{:<22} {:<28} {:<10} {:<10} {}",
-            trunc(&s.project, 22),
-            trunc(&s.name, 28),
-            s.phase.as_str(),
-            health.label(),
+            trunc(&r.project, 22),
+            trunc(&r.name, 28),
+            r.phase,
+            r.health,
             pr
         );
+    }
+    Ok(())
+}
+
+fn print_fleet_json() -> Result<()> {
+    let rows = fleet_snapshot(load_all()?, Utc::now(), STALE_SECS);
+    println!("{}", serde_json::to_string(&rows)?);
+    Ok(())
+}
+
+/// Print the fleet snapshot, then re-print on every change under `~/.spec`. This is
+/// the exact live feed the desktop app's backend wraps.
+fn watch() -> Result<()> {
+    print_fleet_json()?;
+    let root = paths::spec_root()?;
+    if !root.exists() {
+        return Ok(());
+    }
+    let (tx, rx) = channel();
+    let mut watcher = notify::recommended_watcher(move |res| {
+        let _ = tx.send(res);
+    })?;
+    watcher.watch(&root, RecursiveMode::Recursive)?;
+    while rx.recv().is_ok() {
+        while rx.try_recv().is_ok() {} // coalesce a burst of fs events
+        print_fleet_json()?;
     }
     Ok(())
 }

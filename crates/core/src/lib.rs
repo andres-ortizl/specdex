@@ -3,6 +3,7 @@ pub mod event;
 pub mod paths;
 pub mod ports;
 pub mod state;
+pub mod view;
 
 pub use config::{
     get_dotted, load_effective, reactor_for, schema, validate, Action, Effective, HookPoint,
@@ -13,6 +14,7 @@ pub use event::{
 };
 pub use ports::pick_offset;
 pub use state::{AgentSnapshot, GateSummary, Health, PrRef, SpecState, TestSummary};
+pub use view::{fleet_snapshot, AgentView, FleetRow};
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;

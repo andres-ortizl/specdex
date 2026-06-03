@@ -13,3 +13,4 @@ serde_json.workspace = true
 chrono.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+notify.workspace = true
