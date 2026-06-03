@@ -48,31 +48,29 @@ Two surfaces deep, hairline rules, one interactive accent, five health hues.
 ```css
 :root {
   /* surfaces */
-  --paper:      #f4f3f0;   /* app background — warm off-white, from Drams paper */
-  --surface:    #fbfaf8;   /* minion card */
-  --surface-2:  #ffffff;   /* raised / hover */
-  --rule:       #e4e2dc;   /* hairline borders, dividers */
-  --rule-soft:  #eeece7;
+  --paper:      #f4f4f2;
+  --surface:    #ffffff;
+  --surface-2:  #faf9f7;
+  --rule:       #d9d6cf;
+  --rule-soft:  #ece9e2;
 
   /* ink */
-  --ink:        #232220;   /* primary text — Drams' near-black, warmed */
-  --ink-muted:  #6e6a62;   /* secondary */
-  --ink-faint:  #a8a399;   /* tertiary / placeholder */
+  --ink:        #262420;
+  --ink-muted:  #6e6a62;
+  --ink-faint:  #a29d92;
 
-  /* single interactive accent (Drams blue) */
-  --accent:     #0a84ff;
+  /* single interactive accent — links, PR, current rail node. Never status. */
+  --accent:     #0a86e8;
   --accent-fg:  #ffffff;
-  --accent-soft:#dcebfd;
+  --accent-soft:#dbeefd;
 
-  /* health hues — calm, desaturated; each = dot color + soft wash */
-  --alive:      #3f9d6b;  --alive-soft:   #e4f1ea;   /* working — green, breathing */
-  --idle:       #8b8780;  --idle-soft:    #ecebe7;   /* waiting — neutral, resting */
-  --stale:      #b08a3e;  --stale-soft:   #f4ecd9;   /* no heartbeat — muted amber */
-  --needs:      #e8601a;  --needs-soft:   #fbe7da;   /* blocked on human — the ember */
-  --done:       #5a86c4;  --done-soft:    #e6edf7;   /* complete — restful slate-blue */
-
-  --shadow:     0 1px 2px rgba(40,38,34,.04), 0 2px 8px rgba(40,38,34,.04);
-  --shadow-lift:0 2px 6px rgba(40,38,34,.06), 0 8px 24px rgba(40,38,34,.07);
+  /* health hues — dot color + soft wash. ONLY the dot carries these. */
+  --alive:  #3f9d6b;  --alive-soft: #e6f1ea;   /* working — green, breathing */
+  --idle:   #8b8780;  --idle-soft:  #edebe6;   /* waiting — neutral hollow ring */
+  --stale:  #b08a3e;  --stale-soft: #f5edda;   /* no heartbeat — muted amber */
+  --needs:  var(--ember);  --needs-soft: var(--ember-soft); /* blocked — ember */
+  /* done = NEUTRAL, NOT blue. Blue is reserved for interactive + current rail node. */
+  --done:   #7c7a72;  --done-soft:  #eceae5;
 }
 ```
 
@@ -80,40 +78,35 @@ Two surfaces deep, hairline rules, one interactive accent, five health hues.
 
 ```css
 :root[data-theme="dark"] {
-  --paper:      #16150f;
-  --surface:    #1e1c16;
-  --surface-2:  #262319;
-  --rule:       #2e2b22;
-  --rule-soft:  #262319;
+  --paper:      #181610;
+  --surface:    #211e17;
+  --surface-2:  #1b1812;
+  --rule:       #36322a;
+  --rule-soft:  #2a261f;
 
-  --ink:        #ece8dd;
-  --ink-muted:  #9c968a;
-  --ink-faint:  #6b665b;
+  --ink:        #ece7da;
+  --ink-muted:  #a39c8c;
+  --ink-faint:  #6f695c;
 
-  --accent:     #5aa6ff;
-  --accent-fg:  #11151c;
-  --accent-soft:#1e3552;
-
-  --alive:      #5fc08a;  --alive-soft:  #18271e;
-  --idle:       #9a958a;  --idle-soft:   #242219;
-  --stale:      #d3a85a;  --stale-soft:  #2c2516;
-  --needs:      #ff7a3d;  --needs-soft:  #2e1c12;
-  --done:       #7ba6e0;  --done-soft:   #1a2230;
-
-  --shadow:     0 1px 2px rgba(0,0,0,.30), 0 2px 8px rgba(0,0,0,.28);
-  --shadow-lift:0 2px 6px rgba(0,0,0,.34), 0 10px 28px rgba(0,0,0,.40);
+  --accent:     #4fa8ff;
+  --alive: #5fc08a;  --alive-soft: #1a2a20;
+  --idle:  #9a958a;  --idle-soft:  #26231b;
+  --stale: #d3a85a;  --stale-soft: #2f2818;
+  --needs: var(--ember);  --needs-soft: var(--ember-soft);
+  --done:  #9b968a;  --done-soft:  #262219;
 }
 ```
 
 **Rules**
 
-- **One interactive accent** (`--accent`, blue). It marks the *only* thing you can act
-  on per screen. Never use it for status.
+- **One interactive accent** (`--accent`, blue). Links, PR, the current rail node — the
+  live cursor. Never status.
 - **`needs-you` owns the only warm hue.** The ember `--needs` is the single point of
-  warmth in the whole palette — that is *why* it draws the eye without an alarm. No red,
-  no flashing, no badge-count anxiety.
-- Health is communicated by the **LED life-dot color + a thin tinted top edge**, never
-  by recoloring the whole card. Calm > loud.
+  warmth — that is *why* it draws the eye without an alarm.
+- **Health is the dot only.** No card top-edge stripe; no health hue on the rail.
+  The labeled legend above the fleet is the single key.
+- **`--done` is neutral grey**, not blue. Blue exclusively means "interactive."
+- **Theme toggle cycles system → light → dark** (3-state, `localStorage.dexTheme`).
 
 ---
 
@@ -213,12 +206,12 @@ A minion is a **card you read like a face without a face**. Reading order, top-l
 bottom-right:
 
 ```
-┌─[health edge]──────────────────────────────┐
-│  ● parse-cache                       PR 4012 │   life-dot + name        · pr (mono, right)
+┌──────────────────────────────────────────────┐
+│  ● parse-cache                       PR 4012 │   health dot + name      · pr (mono, right)
 │  anyformat-backend                           │   project path (mono, muted)
 │                                              │
-│  ◐ ◐ ◑ ◑ ◐ ◐ ◑ ●━━━━━━━━━━━━━━━━━○ ○        │   phase rail (8 nodes; filled=done, ring=current)
-│  VERIFY                                       │   current phase label (micro, uppercase)
+│  ◐ ◐ ◑ ◑ ◐ ◐ ◑ ●━━━━━━━━━━━━━━━━━○ ○        │   phase rail (8 nodes; neutral, accent=current)
+│  verify                                      │   current phase label
 │                                              │
 │  [coder ●] [reviewer ○]      round 2 · ★ 4   │   agent pips (left) · review meta (right)
 │  ⚑ infra flake                               │   blocked reason — only when needs-you
@@ -227,32 +220,29 @@ bottom-right:
 
 ### Parts
 
-1. **Health edge** — a 3px tinted left border + a faint full-card wash in the matching
-   `--*-soft`. This is the ambient "how is it doing" read from across the room. Calm
-   tint, never a fill.
+1. **Health dot** — the **only** surface that carries health color. A glowing LED
+   (`--r-pill`, 10px). States:
+   - `alive` — `--alive` green, **breathing** (2.8s pulse).
+   - `idle` — **hollow ring** in `--idle` grey, no fill. At rest.
+   - `stale` — `--stale` amber + faint dashed ring (heartbeat missed).
+   - `needs-you` — `--needs` ember, **slow attention pulse** (3.4s).
+   - `done` — `--done` neutral grey, flat fill + a tiny inset **check glyph**, no glow.
 
-2. **Life-dot** — a glowing **LED** (`--r-pill`, 9px): a radial sheen over the `--hue`
-   plus a colored halo (`box-shadow`). Its **color = health**, and its **motion =
-   liveness**:
-   - `alive` — `--alive` green, **breathing** (2.6s pulse).
-   - `idle` — `--idle` neutral gray, **steady**, slightly dimmed. At rest.
-   - `stale` — `--stale` amber, **steady + a faint dashed ring** (heartbeat missed).
-   - `needs-you` — `--needs` ember, **slow attention pulse** (3.4s, gentle), plus the
-     ember edge. Draws the eye by *warmth + the only colored edge*, not by speed.
-   - `done` — `--done` slate-blue, **solid, no motion**, fully at rest.
+   A labeled **legend** above the fleet is the single key. No health stripe on cards.
 
-3. **Name** (`--t-name`) — the spec name, the identity. Project path sits beneath in
+2. **Name** (`--t-name`) — the spec name, the identity. Project path sits beneath in
    mono `--ink-muted` (the `project` field).
 
-4. **Phase rail** — a hardware progress strip of 8 sockets for `setup · plan · build ·
-   review · ship · verify · complete · accepted`. *Before* current = quietly-lit
-   `--ink-faint` pips; *current* = a **glowing LED in the health hue**; *after* =
-   recessed empty `--well` sockets. Sunk grooves connect them. Reads like progress
-   without a percentage bar's pressure. The current phase name shows below as a label.
+3. **Phase rail** — a hardware progress strip of 8 sockets (`setup·plan·build·review·
+   ship·verify·complete·accepted`). **Strictly neutral — never a health hue.**
+   - Done nodes → ink-grey (`--ink-faint`).
+   - Current node → `--accent` blue (the live cursor; consistent with interactive blue).
+   - Future sockets → recessed `--well`.
+   - A done spec: rail fully ink-grey, no blue cursor (`.rail.complete`).
 
-5. **Agent pips** — up to two: `coder`, `reviewer`. A filled pip = `active:true`, a
-   hollow ring = present but `active:false`. Active pips inherit the breathing of the
-   life-dot (subtler). Label in `--t-meta`. Absent role = absent pip (no placeholder).
+4. **Agent pips** — up to two: `coder`, `reviewer`. Filled = `active:true`, hollow ring
+   = inactive. Active pips glow **green** (`--alive`), independent of spec health.
+   Label in `--t-meta`. Absent role = absent pip.
 
 6. **Review meta** (right of agents) — `round N` and a small `★ score` (1–5) when
    `review_round` / `review_score` are present. Tabular nums so they don't jitter on
@@ -267,20 +257,21 @@ bottom-right:
 
 ### Health → treatment summary
 
-| health | dot color | dot motion | card edge / wash | extra |
-|---|---|---|---|---|
-| `alive` | green | breathe 2.6s | green hairline + faint wash | active agent pips breathe |
-| `idle` | gray | none (dimmed) | neutral, minimal | — |
-| `stale` | amber | none + dashed ring | amber, faint | "no heartbeat" read |
-| `needs-you` | ember | slow pulse 3.4s | ember edge + warm wash | blocked-reason line + flag |
-| `done` | slate-blue | none, solid | slate, soft | rail fully filled, restful |
+| health | dot | motion | extra |
+|---|---|---|---|
+| `alive` | green LED | breathe 2.8s | active agent pips glow green |
+| `idle` | grey **hollow ring** | none | — |
+| `stale` | amber + dashed ring | none | "no heartbeat" read |
+| `needs-you` | ember | slow pulse 3.4s | blocked-reason line + flag |
+| `done` | neutral grey + **check** | none, solid | rail fully ink-grey (`.rail.complete`) |
+
+No card top-edge stripe. No card wash. The labeled **legend** above the fleet is the key.
 
 ### Phase → treatment
 
-Phase only drives the **rail** (which node is ringed) and the **micro-label**. It does
-*not* change card color — health owns color, phase owns position. Late phases
-(`ship`/`verify`/`complete`/`accepted`) naturally show a fuller rail, giving a sense of a
-spec "maturing" left-to-right without any extra styling.
+Phase drives the **rail** (node positions) and the **label** only. The rail is **fully
+neutral** — `done` nodes in ink-grey, `current` node in `--accent` blue, future in
+`--well`. Health has no effect on rail color.
 
 ---
 
@@ -291,7 +282,8 @@ spec "maturing" left-to-right without any extra styling.
 - `style.css` — all tokens (incl. the `--lift`/`--press`/`--well` depth set) + every
   component, light & dark.
 - `app.js` — renders ~6 hardcoded sample minions (every health state, several phases)
-  from the `FleetRow` shape, and wires the 2-position `light ↔ dark` soft toggle.
+  from the `FleetRow` shape, wires the 3-state theme toggle (system → light → dark),
+  and manages the `Cards ⇄ List` layout toggle (default: List, persisted).
 - `drams-components.html` — self-contained reference gallery of the tactile components
   (soft toggle, push buttons, slider, rotary dial, segmented switch) in the palette.
 

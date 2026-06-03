@@ -303,8 +303,9 @@ function fmtUTC(iso) {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
-function renderRail(currentPhase) {
-  const rail = el("div", "rail");
+function renderRail(currentPhase, opts) {
+  const complete = opts && opts.complete;
+  const rail = el("div", "rail" + (complete ? " complete" : ""));
   const cur = PHASE_INDEX[currentPhase] ?? 0;
   PHASES.forEach((phase, i) => {
     if (i > 0) rail.appendChild(el("span", "rail-link" + (i <= cur ? " done" : "")));
@@ -316,6 +317,13 @@ function renderRail(currentPhase) {
     rail.appendChild(node);
   });
   return rail;
+}
+
+function healthDot(health) {
+  const d = el("span", "dot");
+  d.dataset.health = health;
+  d.title = health;
+  return d;
 }
 
 // ============================ fleet ============================
@@ -338,7 +346,7 @@ function renderMinion(row) {
   });
 
   const head = el("div", "m-head");
-  head.appendChild(el("span", "life-dot"));
+  head.appendChild(healthDot(row.health));
 
   const name = el("span", "m-name");
   name.textContent = row.name;
@@ -370,7 +378,7 @@ function renderMinion(row) {
   card.appendChild(head);
 
   const phaseWrap = el("div", "m-phase");
-  phaseWrap.appendChild(renderRail(row.phase));
+  phaseWrap.appendChild(renderRail(row.phase, { complete: row.health === "done" }));
   const label = el("span", "phase-label");
   label.textContent = row.phase;
   phaseWrap.appendChild(label);
@@ -417,11 +425,109 @@ function renderMinion(row) {
   return card;
 }
 
+function renderListHeader() {
+  const h = el("div", "list-cols");
+  h.setAttribute("role", "row");
+  [
+    ["", "c-dot"], ["spec", "c-name"], ["phase", "c-rail"], ["", "c-phaselbl"],
+    ["agents", "c-agents"], ["pr", "c-pr"], ["review", "c-round num"], ["updated", "c-updated num"],
+  ].forEach(([label, cls]) => {
+    const c = el("div", "col-h " + cls);
+    c.setAttribute("role", "columnheader");
+    c.textContent = label;
+    h.appendChild(c);
+  });
+  return h;
+}
+
+function renderListRow(row) {
+  const r = el("a", "list-row");
+  r.href = "#";
+  r.setAttribute("role", "row");
+  r.setAttribute("aria-label", row.name + " — " + row.phase + ", " + row.health);
+  r.addEventListener("click", (e) => {
+    e.preventDefault();
+    navigate({ view: "detail", project: row.project, name: row.name });
+  });
+
+  const dotCell = el("div", "lc-dot");
+  dotCell.appendChild(healthDot(row.health));
+  r.appendChild(dotCell);
+
+  const nameCell = el("div", "lc-name");
+  const nm = el("span", "nm"); nm.textContent = row.name; nm.title = row.name;
+  nameCell.appendChild(nm);
+  const pj = el("span", "pj"); pj.textContent = row.project; pj.title = row.project;
+  const badge = modeBadge(row.mode);
+  if (badge) pj.appendChild(badge);
+  nameCell.appendChild(pj);
+  if (row.health === "needs-you" && row.blocked_reason) {
+    const bl = el("span", "blocked", ICONS.flag);
+    bl.appendChild(document.createTextNode(row.blocked_reason));
+    bl.title = row.blocked_reason;
+    nameCell.appendChild(bl);
+  }
+  r.appendChild(nameCell);
+
+  const railCell = el("div", "lc-rail");
+  railCell.appendChild(renderRail(row.phase, { complete: row.health === "done" }));
+  r.appendChild(railCell);
+
+  const phaseCell = el("div", "lc-phase");
+  phaseCell.textContent = row.phase;
+  r.appendChild(phaseCell);
+
+  const agentsCell = el("div", "lc-agents");
+  if (row.agents.length === 0) {
+    const none = el("span", "agent none lc-empty"); none.textContent = "—"; agentsCell.appendChild(none);
+  } else {
+    row.agents.forEach((a) => {
+      const ag = el("div", "agent" + (a.active ? " active" : ""));
+      ag.appendChild(el("span", "agent-pip"));
+      ag.appendChild(document.createTextNode(a.role));
+      agentsCell.appendChild(ag);
+    });
+  }
+  r.appendChild(agentsCell);
+
+  const prCell = el("div", "lc-pr");
+  if (row.pr != null) {
+    const a = el("a"); a.href = "#"; a.textContent = "PR " + row.pr;
+    a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); });
+    prCell.appendChild(a);
+    if (row.pr_state && row.pr_state !== "open") prCell.appendChild(prStateChip(row.pr_state));
+  } else {
+    prCell.innerHTML = '<span class="lc-empty">—</span>';
+  }
+  r.appendChild(prCell);
+
+  const roundCell = el("div", "lc-round");
+  if (row.review_round > 0 || row.review_score != null) {
+    let html = "";
+    if (row.review_round > 0) html += "r" + row.review_round;
+    if (row.review_score != null) html += (html ? " " : "") + '<span class="star">★</span>' + row.review_score;
+    roundCell.innerHTML = html;
+  } else {
+    roundCell.innerHTML = '<span class="lc-empty">—</span>';
+  }
+  r.appendChild(roundCell);
+
+  const upCell = el("div", "lc-updated");
+  upCell.textContent = relTime(row.updated_at);
+  upCell.title = row.updated_at || "";
+  r.appendChild(upCell);
+
+  return r;
+}
+
 let LAST_FLEET = [];
 
 // Fleet sort: "recent" (last activity), "state" (health), or "name". Persisted.
 const FLEET_SORTS = ["recent", "state", "name"];
 let FLEET_SORT = FLEET_SORTS.includes(localStorage.dexFleetSort) ? localStorage.dexFleetSort : "recent";
+
+// Fleet layout: "list" (default) or "cards". Persisted.
+let LAYOUT = ["list", "cards"].includes(localStorage.dexFleetLayout) ? localStorage.dexFleetLayout : "list";
 // State order = activity gradient: working first, done last.
 const HEALTH_RANK = { alive: 0, "needs-you": 1, idle: 2, stale: 3, done: 4 };
 
@@ -536,27 +642,51 @@ const SB_CONFIG = {};
 function renderFleet(rows) {
   LAST_FLEET = rows || [];
   renderSidebar(LAST_FLEET);
-  const root = document.getElementById("fleet");
-  root.textContent = "";
+  const fleetEl = document.getElementById("fleet");
+  const listwrap = document.getElementById("listwrap");
+  const list = document.getElementById("list");
   const count = document.getElementById("fleet-count");
+
   if (!rows || rows.length === 0) {
+    fleetEl.textContent = "";
     const empty = el(
       "div", null,
       'No active specs yet.<br><span style="font-size:13px">Start one with <code>/spec</code> — minions appear here as they run.</span>'
     );
     empty.style.cssText =
       "grid-column:1/-1;color:var(--ink-faint);text-align:center;padding:56px 8px;line-height:1.7";
-    root.appendChild(empty);
+    fleetEl.appendChild(empty);
     count.textContent = "0 specs";
+    fleetEl.hidden = false;
+    listwrap.hidden = true;
     return;
   }
-  const sorted = sortRows(rows);
-  sorted.forEach((row, i) => {
-    const card = renderMinion(row);
-    card.style.animationDelay = i * 40 + "ms";
-    root.appendChild(card);
-  });
+
   count.textContent = rows.length + (rows.length === 1 ? " spec" : " specs");
+  const sorted = sortRows(rows);
+
+  const onFleet = document.getElementById("detail").hidden;
+  if (onFleet) {
+    fleetEl.hidden = LAYOUT !== "cards";
+    listwrap.hidden = LAYOUT !== "list";
+  }
+
+  if (LAYOUT === "cards") {
+    fleetEl.textContent = "";
+    sorted.forEach((row, i) => {
+      const card = renderMinion(row);
+      card.style.animationDelay = i * 40 + "ms";
+      fleetEl.appendChild(card);
+    });
+  } else {
+    list.textContent = "";
+    list.appendChild(renderListHeader());
+    sorted.forEach((row, i) => {
+      const r = renderListRow(row);
+      r.style.animationDelay = i * 24 + "ms";
+      list.appendChild(r);
+    });
+  }
 }
 
 // Re-evaluate liveness on a slow tick: motion follows real recency, not labels.
@@ -1273,8 +1403,22 @@ function renderMarkdown(text) {
 // ============================ routing ============================
 
 function showView(view) {
-  document.getElementById("fleet").hidden = view !== "fleet";
-  document.getElementById("detail").hidden = view !== "detail";
+  const onFleet = view === "fleet";
+  const legend = document.getElementById("legend");
+  const controls = document.getElementById("fleet-controls");
+  const listwrap = document.getElementById("listwrap");
+
+  if (legend) legend.hidden = !onFleet;
+  if (controls) controls.hidden = !onFleet;
+  document.getElementById("detail").hidden = onFleet;
+
+  if (!onFleet) {
+    document.getElementById("fleet").hidden = true;
+    listwrap.hidden = true;
+  } else {
+    document.getElementById("fleet").hidden = LAYOUT !== "cards";
+    listwrap.hidden = LAYOUT !== "list";
+  }
 }
 
 async function loadDetail(project, name) {
@@ -1316,21 +1460,37 @@ function routeFromHash() {
 
 // ============================ theme ============================
 
+const THEME_ICON = {
+  system: ICONS.system,
+  light: ICONS.sun,
+  dark: ICONS.moon,
+};
+const THEME_ORDER = ["system", "light", "dark"];
+
 function applyTheme(state) {
-  document.documentElement.dataset.theme = state;
+  const resolved = state === "system"
+    ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+    : state;
+  document.documentElement.dataset.theme = resolved;
   const btn = document.getElementById("theme-toggle");
-  btn.setAttribute("aria-pressed", state === "dark" ? "true" : "false");
-  btn.title = "Theme: " + state;
+  btn.dataset.state = state;
+  btn.setAttribute("aria-label", "Theme: " + state);
+  btn.title = "Theme: " + state + " (click to cycle)";
+  const knob = document.getElementById("t-knob");
+  if (knob) knob.innerHTML = THEME_ICON[state] || "";
 }
 
 function initTheme() {
-  // drams' identity lives in warm-paper light — a 2-position switch: light ↔ dark.
-  let state = localStorage.dexTheme === "dark" ? "dark" : "light";
+  const saved = localStorage.dexTheme;
+  let state = THEME_ORDER.includes(saved) ? saved : "system";
   applyTheme(state);
   document.getElementById("theme-toggle").addEventListener("click", () => {
-    state = state === "dark" ? "light" : "dark";
+    state = THEME_ORDER[(THEME_ORDER.indexOf(state) + 1) % THEME_ORDER.length];
     localStorage.dexTheme = state;
     applyTheme(state);
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if ((localStorage.dexTheme || "system") === "system") applyTheme("system");
   });
 }
 
@@ -1353,11 +1513,29 @@ function initFleetSort() {
   paint();
 }
 
+function initLayoutToggle() {
+  const group = document.getElementById("layout-toggle");
+  if (!group) return;
+  const buttons = group.querySelectorAll("button[data-layout]");
+  const paint = () =>
+    buttons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.layout === LAYOUT ? "true" : "false"));
+  buttons.forEach((b) =>
+    b.addEventListener("click", () => {
+      LAYOUT = b.dataset.layout;
+      localStorage.dexFleetLayout = LAYOUT;
+      paint();
+      renderFleet(LAST_FLEET);
+    })
+  );
+  paint();
+}
+
 function boot() {
   document.getElementById("brand-home").addEventListener("click", (e) => {
     e.preventDefault();
     navigate({ view: "fleet" });
   });
+  initLayoutToggle();
   initFleetSort();
   window.addEventListener("hashchange", routeFromHash);
 
@@ -1377,6 +1555,11 @@ function boot() {
 
   routeFromHash();
   setInterval(tickLiveness, TICK_MS);
+  setInterval(() => {
+    if (LAYOUT === "list" && !document.getElementById("listwrap").hidden) {
+      renderFleet(LAST_FLEET);
+    }
+  }, 15_000);
 }
 
 initTheme();
