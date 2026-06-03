@@ -1,35 +1,51 @@
-// specdex prototype — renders a fleet of minions from hardcoded FleetRow samples.
-// Vanilla JS, no framework, no build step. Mirrors crates/core/src/view.rs::FleetRow.
+// specdex — fleet + spec-detail. Vanilla JS, no framework, no build step.
+// Mirrors crates/core view models. Live data comes from Tauri (`fleet`,
+// `spec_detail`); when opened standalone it falls back to hardcoded samples so
+// the design/ prototype keeps working.
 
 const PHASES = [
   "setup", "plan", "build", "review", "ship", "verify", "complete", "accepted",
 ];
+const PHASE_INDEX = Object.fromEntries(PHASES.map((p, i) => [p, i]));
 
-// ~6 sample minions covering every health state and several phases.
+// Motion = real recency, not the health label. A spec is "live" if it changed
+// within this window; only then does its life-dot breathe.
+const LIVE_WINDOW_MS = 45_000;
+const TICK_MS = 5_000;
+
+const ISO = (offsetMs) => new Date(Date.now() - offsetMs).toISOString();
+
+// ~6 sample minions covering every health state + several phases. updated_at
+// drives the recency breathing: the two alive specs changed seconds ago (they
+// breathe); everything else is calm.
 const FLEET = [
   {
     project: "anyformat-backend", name: "parse-cache", phase: "build",
     health: "alive",
     agents: [{ role: "coder", active: true }, { role: "reviewer", active: false }],
     pr: null, blocked_reason: null, review_round: 0, review_score: null, offset: 4,
+    updated_at: ISO(6_000),
   },
   {
     project: "anyformat-backend", name: "timeseries-perf", phase: "review",
     health: "alive",
     agents: [{ role: "coder", active: false }, { role: "reviewer", active: true }],
     pr: 3998, blocked_reason: null, review_round: 1, review_score: null, offset: 8,
+    updated_at: ISO(22_000),
   },
   {
     project: "specdex", name: "fleet-watch", phase: "plan",
     health: "idle",
     agents: [{ role: "coder", active: false }],
     pr: null, blocked_reason: null, review_round: 0, review_score: null, offset: 0,
+    updated_at: ISO(8 * 60_000),
   },
   {
     project: "anyformat-frontend", name: "results-virtualize", phase: "build",
     health: "stale",
     agents: [{ role: "coder", active: false }],
     pr: null, blocked_reason: null, review_round: 0, review_score: null, offset: 12,
+    updated_at: ISO(41 * 60_000),
   },
   {
     project: "anyformat-backend", name: "verify-flake", phase: "verify",
@@ -37,16 +53,104 @@ const FLEET = [
     agents: [{ role: "coder", active: true }, { role: "reviewer", active: false }],
     pr: 4012, blocked_reason: "infra flake on CI — needs a human re-run",
     review_round: 2, review_score: 4, offset: 20,
+    updated_at: ISO(12 * 60_000),
   },
   {
     project: "anyformat-sdk", name: "typed-create-proxy", phase: "accepted",
     health: "done",
     agents: [],
     pr: 3990, blocked_reason: null, review_round: 1, review_score: 5, offset: 0,
+    updated_at: ISO(2 * 3600_000),
   },
 ];
 
-const PHASE_INDEX = Object.fromEntries(PHASES.map((p, i) => [p, i]));
+// Sample spec_detail payloads, keyed "project/name", for the standalone prototype.
+function sampleDetail(project, name) {
+  const t = (ms) => ISO(ms);
+  if (project === "anyformat-backend" && name === "verify-flake") {
+    return {
+      health: "needs-you",
+      state: {
+        project, name, phase: "verify", branch: "verify-flake",
+        worktree: "~/code/anyformat-backend.worktrees/verify-flake",
+        offset: 20, ports: { backend: 8020, frontend: 5193, db: 5452 },
+        pr: { number: 4012, url: "https://github.com/anyformat-ai/anyformat-backend/pull/4012" },
+        review_round: 2, review_score: 4,
+        blocked_reason: "infra flake on CI — needs a human re-run",
+        last_test: { passed: 318, failed: 2 },
+        last_gate: { provider: "github-actions", result: "failure" },
+        agents: [
+          { role: "coder", active: true, since: t(3 * 60_000) },
+          { role: "reviewer", active: false, since: t(20 * 60_000) },
+        ],
+        created_at: t(95 * 60_000), updated_at: t(12 * 60_000),
+        last_heartbeat: t(12 * 60_000),
+      },
+      events: [
+        { type: "spec.created", time: t(95 * 60_000), source: "dex",
+          data: { branch: "verify-flake", worktree: "~/code/anyformat-backend.worktrees/verify-flake" } },
+        { type: "ports.assigned", time: t(95 * 60_000), source: "dex",
+          data: { offset: 20, ports: { backend: 8020, frontend: 5193, db: 5452 } } },
+        { type: "phase.enter", time: t(94 * 60_000), source: "coder", data: { phase: "plan" } },
+        { type: "agent.spawn", time: t(93 * 60_000), source: "dex", data: { role: "coder", agent_id: "c-7a1" } },
+        { type: "phase.enter", time: t(80 * 60_000), source: "coder", data: { phase: "build" } },
+        { type: "heartbeat", time: t(78 * 60_000), source: "coder", data: {} },
+        { type: "heartbeat", time: t(76 * 60_000), source: "coder", data: {} },
+        { type: "heartbeat", time: t(74 * 60_000), source: "coder", data: {} },
+        { type: "test.result", time: t(60 * 60_000), source: "coder",
+          data: { passed: 320, failed: 0, cmd: "pytest -q" } },
+        { type: "phase.enter", time: t(58 * 60_000), source: "coder", data: { phase: "review" } },
+        { type: "agent.spawn", time: t(57 * 60_000), source: "dex", data: { role: "reviewer", agent_id: "r-3c9" } },
+        { type: "review.verdict", time: t(45 * 60_000), source: "reviewer",
+          data: { round: 1, verdict: "changes_requested", blockers: 1, issues: 3 } },
+        { type: "note", time: t(44 * 60_000), source: "reviewer",
+          data: { level: "warn", topic: "perf", text: "N+1 query in the results serializer" } },
+        { type: "phase.enter", time: t(30 * 60_000), source: "coder", data: { phase: "build", reason: "addressing review" } },
+        { type: "review.verdict", time: t(20 * 60_000), source: "reviewer",
+          data: { round: 2, verdict: "approved", blockers: 0, issues: 0 } },
+        { type: "agent.idle", time: t(20 * 60_000), source: "reviewer", data: { role: "reviewer" } },
+        { type: "pr.created", time: t(18 * 60_000), source: "dex",
+          data: { number: 4012, url: "https://github.com/anyformat-ai/anyformat-backend/pull/4012" } },
+        { type: "phase.enter", time: t(16 * 60_000), source: "coder", data: { phase: "verify" } },
+        { type: "gate.status", time: t(14 * 60_000), source: "github-actions",
+          data: { provider: "github-actions", name: "ci", result: "failure" } },
+        { type: "test.result", time: t(13 * 60_000), source: "coder",
+          data: { passed: 318, failed: 2, cmd: "pytest -q" } },
+        { type: "spec.blocked", time: t(12 * 60_000), source: "dex",
+          data: { reason: "infra flake on CI — needs a human re-run" } },
+      ],
+    };
+  }
+  // Generic calm sample for any other card.
+  const row = FLEET.find((r) => r.project === project && r.name === name) || FLEET[0];
+  return {
+    health: row.health,
+    state: {
+      project, name, phase: row.phase, branch: name,
+      worktree: "~/code/" + project + ".worktrees/" + name,
+      offset: row.offset, ports: { backend: 8000 + (row.offset || 0), frontend: 5173 + (row.offset || 0) },
+      pr: row.pr ? { number: row.pr, url: "#" } : undefined,
+      review_round: row.review_round, review_score: row.review_score,
+      blocked_reason: row.blocked_reason,
+      last_test: { passed: 142, failed: 0 },
+      last_gate: undefined,
+      agents: row.agents.map((a) => ({ ...a, since: ISO(5 * 60_000) })),
+      created_at: ISO(60 * 60_000), updated_at: row.updated_at,
+      last_heartbeat: row.updated_at,
+    },
+    events: [
+      { type: "spec.created", time: ISO(60 * 60_000), source: "dex",
+        data: { branch: name, worktree: "~/code/" + project + ".worktrees/" + name } },
+      { type: "phase.enter", time: ISO(58 * 60_000), source: "coder", data: { phase: "plan" } },
+      { type: "agent.spawn", time: ISO(57 * 60_000), source: "dex", data: { role: "coder" } },
+      { type: "phase.enter", time: ISO(40 * 60_000), source: "coder", data: { phase: row.phase } },
+      { type: "heartbeat", time: ISO(20 * 60_000), source: "coder", data: {} },
+      { type: "heartbeat", time: ISO(15 * 60_000), source: "coder", data: {} },
+      { type: "note", time: ISO(10 * 60_000), source: "coder",
+        data: { level: "info", topic: "status", text: "working through the " + row.phase + " step" } },
+    ],
+  };
+}
 
 const ICONS = {
   flag:
@@ -57,6 +161,27 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a6.5 6.5 0 0 0 9.5 9.5z" stroke-linejoin="round"/></svg>',
   system:
     '<svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/></svg>',
+  back:
+    '<svg viewBox="0 0 24 24" stroke-width="1.9"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  terminal:
+    '<svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
+// timeline glyphs per event family
+const EV_ICON = {
+  created:   '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>',
+  ports:     '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M4 12h16M4 7h16M4 17h16" stroke-linecap="round"/></svg>',
+  phase:     '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  blocked:   '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M4 21V4M4 4h12l-2 4 2 4H4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  unblocked: '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M5 12l5 5 9-11" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  heartbeat: '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M3 12h4l2-5 4 10 2-5h6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  agent:     '<svg viewBox="0 0 24 24" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0" stroke-linecap="round"/></svg>',
+  test:      '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  review:    '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M12 5C6 5 2.7 9.5 2 12c.7 2.5 4 7 10 7s9.3-4.5 10-7c-.7-2.5-4-7-10-7z"/><circle cx="12" cy="12" r="2.6"/></svg>',
+  gate:      '<svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg>',
+  pr:        '<svg viewBox="0 0 24 24" stroke-width="1.8"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M6 8.4v7.2M18 15.6V12a3 3 0 0 0-3-3h-4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  note:      '<svg viewBox="0 0 24 24" stroke-width="1.8"><path d="M5 4h14v12l-4 4H5z" stroke-linejoin="round"/><path d="M9 9h6M9 13h4" stroke-linecap="round"/></svg>',
+  dot:       '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>',
 };
 
 function el(tag, cls, html) {
@@ -66,14 +191,27 @@ function el(tag, cls, html) {
   return n;
 }
 
+const isLive = (updatedAt) =>
+  updatedAt != null && Date.now() - Date.parse(updatedAt) < LIVE_WINDOW_MS;
+
+function relTime(iso) {
+  const diff = Date.now() - Date.parse(iso);
+  if (!isFinite(diff)) return "";
+  const s = Math.max(0, Math.round(diff / 1000));
+  if (s < 45) return s <= 5 ? "just now" : s + "s ago";
+  const m = Math.round(s / 60);
+  if (m < 60) return m + "m ago";
+  const h = Math.round(m / 60);
+  if (h < 24) return h + "h ago";
+  const d = Math.round(h / 24);
+  return d + "d ago";
+}
+
 function renderRail(currentPhase) {
   const rail = el("div", "rail");
   const cur = PHASE_INDEX[currentPhase] ?? 0;
   PHASES.forEach((phase, i) => {
-    if (i > 0) {
-      const link = el("span", "rail-link" + (i <= cur ? " done" : ""));
-      rail.appendChild(link);
-    }
+    if (i > 0) rail.appendChild(el("span", "rail-link" + (i <= cur ? " done" : "")));
     let cls = "rail-node";
     if (i < cur) cls += " done";
     else if (i === cur) cls += " current";
@@ -84,12 +222,25 @@ function renderRail(currentPhase) {
   return rail;
 }
 
+// ============================ fleet ============================
+
 function renderMinion(row) {
   const card = el("article", "minion");
   card.dataset.health = row.health;
   card.dataset.phase = row.phase;
+  card.dataset.project = row.project;
+  card.dataset.name = row.name;
+  if (isLive(row.updated_at)) card.classList.add("live");
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", row.name + " — " + row.phase + ", " + row.health);
 
-  // head: life-dot + name + pr + project
+  const open = () => navigate({ view: "detail", project: row.project, name: row.name });
+  card.addEventListener("click", open);
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+  });
+
   const head = el("div", "m-head");
   head.appendChild(el("span", "life-dot"));
 
@@ -103,9 +254,10 @@ function renderMinion(row) {
     pr.textContent = "PR " + row.pr;
     pr.href = "#";
     pr.title = "Pull request #" + row.pr;
+    pr.addEventListener("click", (e) => e.stopPropagation());
     head.appendChild(pr);
   } else {
-    head.appendChild(el("span")); // keep grid columns aligned
+    head.appendChild(el("span"));
   }
 
   const project = el("span", "m-project");
@@ -114,7 +266,6 @@ function renderMinion(row) {
   head.appendChild(project);
   card.appendChild(head);
 
-  // phase rail + label
   const phaseWrap = el("div", "m-phase");
   phaseWrap.appendChild(renderRail(row.phase));
   const label = el("span", "phase-label");
@@ -122,9 +273,7 @@ function renderMinion(row) {
   phaseWrap.appendChild(label);
   card.appendChild(phaseWrap);
 
-  // footer: agents + review meta
   const foot = el("div", "m-foot");
-
   const agents = el("div", "agents");
   if (row.agents.length === 0) {
     const none = el("span", "agent");
@@ -155,7 +304,6 @@ function renderMinion(row) {
   if (meta.childNodes.length) foot.appendChild(meta);
   card.appendChild(foot);
 
-  // blocked reason — needs-you only
   if (row.health === "needs-you" && row.blocked_reason) {
     const blocked = el("div", "m-blocked");
     blocked.innerHTML = ICONS.flag;
@@ -166,14 +314,16 @@ function renderMinion(row) {
   return card;
 }
 
+let LAST_FLEET = [];
+
 function renderFleet(rows) {
+  LAST_FLEET = rows || [];
   const root = document.getElementById("fleet");
   root.textContent = "";
   const count = document.getElementById("fleet-count");
   if (!rows || rows.length === 0) {
     const empty = el(
-      "div",
-      null,
+      "div", null,
       'No active specs yet.<br><span style="font-size:13px">Start one with <code>/spec</code> — minions appear here as they run.</span>'
     );
     empty.style.cssText =
@@ -182,7 +332,6 @@ function renderFleet(rows) {
     count.textContent = "0 specs";
     return;
   }
-  // sort: project then name, matching fleet_snapshot() in view.rs
   const sorted = [...rows].sort(
     (a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name)
   );
@@ -191,11 +340,346 @@ function renderFleet(rows) {
     card.style.animationDelay = i * 40 + "ms";
     root.appendChild(card);
   });
-  document.getElementById("fleet-count").textContent =
-    rows.length + (rows.length === 1 ? " spec" : " specs");
+  count.textContent = rows.length + (rows.length === 1 ? " spec" : " specs");
 }
 
-// ---- theme toggle: system → light → dark → system ----
+// Re-evaluate liveness on a slow tick: motion follows real recency, not labels.
+function tickLiveness() {
+  document.querySelectorAll(".minion").forEach((card) => {
+    const row = LAST_FLEET.find(
+      (r) => r.project === card.dataset.project && r.name === card.dataset.name
+    );
+    card.classList.toggle("live", row ? isLive(row.updated_at) : false);
+  });
+  const d = document.getElementById("detail");
+  if (!d.hidden && d.dataset.updatedAt) {
+    d.classList.toggle("live", isLive(d.dataset.updatedAt));
+  }
+}
+
+// ============================ detail ============================
+
+function kv(key, valNode, opts) {
+  const wrap = el("div", "kv" + (opts && opts.span ? " span-all" : ""));
+  const k = el("span", "kv-key");
+  k.textContent = key;
+  wrap.appendChild(k);
+  if (typeof valNode === "string") {
+    const v = el("span", "kv-val" + (opts && opts.mono ? " mono" : ""));
+    v.textContent = valNode;
+    wrap.appendChild(v);
+  } else {
+    wrap.appendChild(valNode);
+  }
+  return wrap;
+}
+
+function renderState(s) {
+  const panel = el("div", "d-state");
+
+  if (s.branch) panel.appendChild(kv("branch", s.branch, { mono: true }));
+  if (s.offset != null) panel.appendChild(kv("port offset", "+" + s.offset, { mono: true }));
+
+  if (s.ports && Object.keys(s.ports).length) {
+    const v = el("span", "kv-val mono");
+    v.textContent = Object.entries(s.ports).map(([k, p]) => k + ":" + p).join("  ");
+    panel.appendChild(kv("ports", v));
+  }
+
+  if (s.pr) {
+    const v = el("span", "kv-val mono");
+    const a = el("a");
+    a.href = s.pr.url || "#";
+    a.textContent = "PR " + s.pr.number;
+    if (window.__TAURI__) a.addEventListener("click", (e) => e.preventDefault());
+    v.appendChild(a);
+    panel.appendChild(kv("pull request", v));
+  }
+
+  if (s.review_round > 0 || s.review_score != null) {
+    const v = el("span", "kv-val");
+    let html = "";
+    if (s.review_round > 0) html += "round " + s.review_round;
+    if (s.review_score != null) html += (html ? "  " : "") + '<span class="star">★</span>' + s.review_score;
+    v.innerHTML = html;
+    panel.appendChild(kv("review", v));
+  }
+
+  if (s.last_test) {
+    const v = el("span", "kv-val");
+    v.innerHTML =
+      '<span class="pass">' + s.last_test.passed + " passed</span>" +
+      (s.last_test.failed > 0 ? '  <span class="fail">' + s.last_test.failed + " failed</span>" : "");
+    panel.appendChild(kv("last test", v));
+  }
+
+  if (s.last_gate) {
+    const ok = s.last_gate.result === "success" || s.last_gate.result === "approved";
+    const v = el("span", "kv-val");
+    v.innerHTML = '<span class="' + (ok ? "pass" : "fail") + '">' +
+      s.last_gate.provider + " · " + s.last_gate.result + "</span>";
+    panel.appendChild(kv("gate", v));
+  }
+
+  if (s.worktree) panel.appendChild(kv("worktree", s.worktree, { mono: true, span: true }));
+
+  if (s.blocked_reason) {
+    const v = el("span", "kv-val blocked");
+    v.textContent = "⚑ " + s.blocked_reason;
+    panel.appendChild(kv("blocked", v, { span: true }));
+  }
+
+  return panel;
+}
+
+// Per-type one-line human summary + classification.
+function describeEvent(ev) {
+  const d = ev.data || {};
+  switch (ev.type) {
+    case "spec.created":
+      return { kind: "created", cls: "", html: "Spec created", sub: d.branch ? "branch " + d.branch : "" };
+    case "ports.assigned":
+      return { kind: "ports", cls: "",
+        html: "Ports assigned <span class=\"em\">+" + (d.offset ?? "") + "</span>",
+        sub: d.ports ? Object.entries(d.ports).map(([k, p]) => k + ":" + p).join("  ") : "" };
+    case "phase.enter":
+      return { kind: "phase", cls: "milestone",
+        html: "Entered <span class=\"em\">" + d.phase + "</span>",
+        sub: d.reason || "" };
+    case "spec.blocked":
+      return { kind: "blocked", cls: "attn", html: "Blocked — needs you", sub: d.reason || "" };
+    case "spec.unblocked":
+      return { kind: "unblocked", cls: "", html: "Unblocked", sub: "" };
+    case "heartbeat":
+      return { kind: "heartbeat", cls: "muted", html: "heartbeat", sub: "", heartbeat: true };
+    case "agent.spawn":
+      return { kind: "agent", cls: "",
+        html: "<span class=\"em\">" + d.role + "</span> spawned",
+        sub: d.agent_id || "" };
+    case "agent.idle":
+      return { kind: "agent", cls: "", html: "<span class=\"em\">" + d.role + "</span> went idle", sub: "" };
+    case "test.result": {
+      const ok = (d.failed || 0) === 0;
+      return { kind: "test", cls: ok ? "" : "attn",
+        html: "Tests " + (ok ? "passed" : "<span class=\"em\">failed</span>") +
+          " — " + d.passed + " passed" + (d.failed ? ", " + d.failed + " failed" : ""),
+        sub: d.cmd || "" };
+    }
+    case "review.verdict": {
+      const ok = d.verdict === "approved";
+      return { kind: "review", cls: ok ? "milestone" : "attn",
+        html: "Review round " + d.round + " — <span class=\"em\">" + d.verdict.replace(/_/g, " ") + "</span>",
+        sub: ok ? "" : (d.blockers || 0) + " blockers · " + (d.issues || 0) + " issues" };
+    }
+    case "gate.status": {
+      const ok = d.result === "success";
+      return { kind: "gate", cls: ok ? "" : "attn",
+        html: (d.name || d.provider) + " — <span class=\"em\">" + d.result + "</span>" +
+          (d.score != null ? " (" + d.score + ")" : ""),
+        sub: d.provider || "" };
+    }
+    case "pr.created":
+      return { kind: "pr", cls: "milestone", html: "PR <span class=\"em\">#" + d.number + "</span> opened", sub: d.url || "" };
+    case "note":
+      return { kind: "note", cls: d.level === "warn" || d.level === "error" ? "attn" : "",
+        html: (d.topic ? "<span class=\"em\">" + d.topic + "</span> — " : "") + (d.text || ""),
+        sub: "" };
+    default:
+      return { kind: "dot", cls: "", html: ev.type, sub: "" };
+  }
+}
+
+let HEARTBEATS_EXPANDED = false;
+
+function renderTimeline(events) {
+  const wrap = el("div", "d-timeline");
+
+  const head = el("div", "tl-head");
+  const h2 = el("h2");
+  h2.textContent = "Timeline";
+  head.appendChild(h2);
+
+  const hbCount = events.filter((e) => e.type === "heartbeat").length;
+  const toggle = el("button", "tl-toggle");
+  toggle.type = "button";
+  toggle.textContent = HEARTBEATS_EXPANDED
+    ? "hide heartbeats"
+    : "show " + hbCount + " heartbeat" + (hbCount === 1 ? "" : "s");
+  toggle.style.visibility = hbCount > 0 ? "visible" : "hidden";
+  toggle.addEventListener("click", () => {
+    HEARTBEATS_EXPANDED = !HEARTBEATS_EXPANDED;
+    renderDetail(CURRENT_DETAIL); // re-render with new collapse state
+  });
+  head.appendChild(toggle);
+  wrap.appendChild(head);
+
+  // newest-first reads like a feed of "what just happened"
+  const sorted = [...events].sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+
+  const tl = el("div", "tl");
+  let pendingHb = [];
+
+  const flushHb = () => {
+    if (!pendingHb.length) return;
+    if (HEARTBEATS_EXPANDED) {
+      pendingHb.forEach((ev) => tl.appendChild(eventRow(ev)));
+    } else if (pendingHb.length === 1) {
+      tl.appendChild(eventRow(pendingHb[0]));
+    } else {
+      // collapse a run of heartbeats into one quiet line
+      const first = pendingHb[0], last = pendingHb[pendingHb.length - 1];
+      const row = el("div", "tl-row hb-collapsed");
+      row.appendChild(el("span", "tl-glyph", EV_ICON.heartbeat));
+      const body = el("div", "tl-body");
+      const sum = el("span", "tl-summary");
+      sum.textContent = pendingHb.length + " heartbeats";
+      sum.title = "Click to expand";
+      sum.addEventListener("click", () => {
+        HEARTBEATS_EXPANDED = true;
+        renderDetail(CURRENT_DETAIL);
+      });
+      body.appendChild(sum);
+      row.appendChild(body);
+      const time = el("span", "tl-time");
+      time.textContent = relTime(first.time);
+      time.title = last.time + " – " + first.time;
+      row.appendChild(time);
+      tl.appendChild(row);
+    }
+    pendingHb = [];
+  };
+
+  sorted.forEach((ev) => {
+    if (ev.type === "heartbeat" && !HEARTBEATS_EXPANDED) { pendingHb.push(ev); return; }
+    flushHb();
+    tl.appendChild(eventRow(ev));
+  });
+  flushHb();
+
+  wrap.appendChild(tl);
+  return wrap;
+}
+
+function eventRow(ev) {
+  const info = describeEvent(ev);
+  const row = el("div", "tl-row" + (info.cls ? " " + info.cls : ""));
+
+  row.appendChild(el("span", "tl-glyph", EV_ICON[info.kind] || EV_ICON.dot));
+
+  const body = el("div", "tl-body");
+  const sum = el("span", "tl-summary", info.html);
+  body.appendChild(sum);
+  if (info.sub) {
+    const sub = el("span", "tl-sub");
+    sub.textContent = info.sub;
+    sub.title = info.sub;
+    body.appendChild(sub);
+  }
+  row.appendChild(body);
+
+  const time = el("span", "tl-time");
+  time.textContent = relTime(ev.time);
+  time.title = ev.time + (ev.source ? "  ·  " + ev.source : "");
+  row.appendChild(time);
+
+  return row;
+}
+
+let CURRENT_DETAIL = null;
+
+function renderDetail(detail) {
+  CURRENT_DETAIL = detail;
+  const s = detail.state;
+  const root = document.getElementById("detail");
+  root.textContent = "";
+  root.dataset.health = detail.health;
+  root.dataset.updatedAt = s.updated_at || "";
+  root.classList.toggle("live", isLive(s.updated_at));
+
+  const back = el("button", "d-back");
+  back.type = "button";
+  back.innerHTML = ICONS.back;
+  back.appendChild(document.createTextNode("fleet"));
+  back.addEventListener("click", () => navigate({ view: "fleet" }));
+  root.appendChild(back);
+
+  const head = el("div", "d-head");
+
+  const titleRow = el("div", "d-title-row");
+  const title = el("div", "d-title");
+  const proj = el("span", "d-project"); proj.textContent = s.project;
+  const slash = el("span", "d-slash"); slash.textContent = "/";
+  const nm = el("span", "d-name"); nm.textContent = s.name;
+  title.append(proj, slash, nm);
+  titleRow.appendChild(title);
+
+  const health = el("div", "d-health");
+  health.appendChild(el("span", "life-dot"));
+  health.appendChild(document.createTextNode(detail.health));
+  titleRow.appendChild(health);
+
+  const attach = el("button", "d-attach");
+  attach.type = "button";
+  attach.innerHTML = ICONS.terminal;
+  attach.appendChild(document.createTextNode("attach in terminal"));
+  attach.title = "dex attach " + s.name + "  (coming soon)";
+  attach.addEventListener("click", () => {
+    attach.lastChild.textContent = "dex attach " + s.name;
+  });
+  titleRow.appendChild(attach);
+  head.appendChild(titleRow);
+
+  const phaseWrap = el("div", "d-phase");
+  phaseWrap.appendChild(renderRail(s.phase));
+  const label = el("span", "phase-label");
+  label.textContent = s.phase;
+  phaseWrap.appendChild(label);
+  head.appendChild(phaseWrap);
+
+  root.appendChild(head);
+  root.appendChild(renderState(s));
+  root.appendChild(renderTimeline(detail.events || []));
+}
+
+// ============================ routing ============================
+
+function showView(view) {
+  document.getElementById("fleet").hidden = view !== "fleet";
+  document.getElementById("detail").hidden = view !== "detail";
+}
+
+async function loadDetail(project, name) {
+  const t = window.__TAURI__;
+  if (t && t.core) {
+    try {
+      return await t.core.invoke("spec_detail", { project, name });
+    } catch (_) { /* fall through to sample */ }
+  }
+  return sampleDetail(project, name);
+}
+
+async function navigate(route) {
+  if (route.view === "detail") {
+    HEARTBEATS_EXPANDED = false;
+    const detail = await loadDetail(route.project, route.name);
+    renderDetail(detail);
+    showView("detail");
+    location.hash = "#/spec/" + encodeURIComponent(route.project) + "/" + encodeURIComponent(route.name);
+  } else {
+    showView("fleet");
+    location.hash = "";
+    CURRENT_DETAIL = null;
+  }
+  window.scrollTo(0, 0);
+}
+
+function routeFromHash() {
+  const m = location.hash.match(/^#\/spec\/([^/]+)\/([^/]+)$/);
+  if (m) navigate({ view: "detail", project: decodeURIComponent(m[1]), name: decodeURIComponent(m[2]) });
+  else showView("fleet");
+}
+
+// ============================ theme ============================
 
 function applyTheme(state) {
   const resolved =
@@ -222,9 +706,15 @@ function initTheme() {
   });
 }
 
-// ---- data source: Tauri live feed in the app, sample when opened standalone ----
+// ============================ boot ============================
 
 function boot() {
+  document.getElementById("brand-home").addEventListener("click", (e) => {
+    e.preventDefault();
+    navigate({ view: "fleet" });
+  });
+  window.addEventListener("hashchange", routeFromHash);
+
   const t = window.__TAURI__;
   if (t && t.core && t.event) {
     t.core.invoke("fleet").then(renderFleet).catch(() => renderFleet([]));
@@ -232,6 +722,9 @@ function boot() {
   } else {
     renderFleet(FLEET); // standalone prototype (design/ or a plain browser)
   }
+
+  routeFromHash();
+  setInterval(tickLiveness, TICK_MS);
 }
 
 initTheme();

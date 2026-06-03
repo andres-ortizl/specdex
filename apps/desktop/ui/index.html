@@ -18,11 +18,11 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
+    <a class="brand" id="brand-home" href="#" aria-label="Back to fleet">
       <span class="brand-mark" aria-hidden="true"></span>
       <h1 class="brand-name">specdex</h1>
       <span class="brand-sub">fleet</span>
-    </div>
+    </a>
 
     <div class="topbar-right">
       <span class="fleet-count" id="fleet-count"></span>
@@ -34,6 +34,8 @@
   </header>
 
   <main class="fleet" id="fleet" aria-label="Running specs"></main>
+
+  <main class="detail" id="detail" aria-label="Spec detail" hidden></main>
 
   <script src="app.js"></script>
 </body>
