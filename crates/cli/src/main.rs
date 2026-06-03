@@ -2,8 +2,8 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use specdex_core::{
-    emit, load_all, validate_score, GateProvider, GateResult, NoteLevel, Payload, Phase, Ports,
-    Role, Verdict,
+    emit, get_dotted, load_all, load_effective, validate, validate_score, GateProvider, GateResult,
+    NoteLevel, Payload, Phase, Ports, Role, Verdict,
 };
 
 /// Resource-verb CLI. The target spec is ambient: set `DEX_SPEC=<project>/<name>`
@@ -95,6 +95,21 @@ enum Cmd {
     },
     /// List every spec in the fleet with derived health
     Ls,
+    /// Inspect merged effective config
+    Config {
+        #[command(subcommand)]
+        op: ConfigOp,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigOp {
+    /// Print the merged effective config as JSON
+    Show,
+    /// Print a single dotted key (e.g. providers.notifier, providers.pr_review.reactor)
+    Get { key: String },
+    /// Validate config and exit nonzero on any violation
+    Validate,
 }
 
 #[derive(Subcommand)]
@@ -113,6 +128,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Ls => return ls(),
+        Cmd::Config { ref op } => return config_cmd(op),
         _ => {}
     }
     let spec = cli
@@ -122,6 +138,26 @@ fn main() -> Result<()> {
     let payload = build_payload(cli.cmd)?;
     let state = emit(&project, &name, payload)?;
     println!("{spec} → {}", state.phase.as_str());
+    Ok(())
+}
+
+fn config_cmd(op: &ConfigOp) -> Result<()> {
+    let cwd = std::env::current_dir()?;
+    match op {
+        ConfigOp::Show => {
+            let eff = load_effective(&cwd)?;
+            println!("{}", serde_json::to_string_pretty(&eff)?);
+        }
+        ConfigOp::Get { key } => {
+            let eff = load_effective(&cwd)?;
+            println!("{}", get_dotted(&eff, key)?);
+        }
+        ConfigOp::Validate => {
+            let eff = load_effective(&cwd)?;
+            validate(&eff)?;
+            println!("ok");
+        }
+    }
     Ok(())
 }
 
@@ -162,7 +198,7 @@ fn build_payload(cmd: Cmd) -> Result<Payload> {
         Cmd::Note { level, topic, text } => {
             Payload::Note { level: parse_level(&level)?, topic, text }
         }
-        Cmd::Ls => unreachable!("ls handled before payload build"),
+        Cmd::Ls | Cmd::Config { .. } => unreachable!("handled before payload build"),
     })
 }
 
