@@ -321,8 +321,8 @@ Rules:
 
 Create a team with two teammates, both with `mode: "bypassPermissions"` so they can run autonomously without blocking on approval prompts:
 
-- **coder** — uses the `coder` agent definition. Implements the approved plan. Mode: `bypassPermissions`.
-- **reviewer** — uses the `reviewer` agent definition. Reviews the coder's work. Mode: `bypassPermissions`.
+- **coder** — uses the `dex-coder` agent definition. Implements the approved plan. Mode: `bypassPermissions`.
+- **reviewer** — uses the `dex-reviewer` agent definition. Reviews the coder's work. Mode: `bypassPermissions`.
 
 > **Communication model — two planes.** Both teammates have `SendMessage`, so messaging is bidirectional and peer-to-peer (full mesh).
 > - **SendMessage = delivery plane** (one-to-one, needs a live recipient). Use it to cut roundtrips: coder/reviewer report to you directly, and the reviewer messages the coder its findings directly (no lead relay). This is the fast lane.

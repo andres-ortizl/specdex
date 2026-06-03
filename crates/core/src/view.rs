@@ -24,6 +24,10 @@ pub struct FleetRow {
     pub review_round: u32,
     pub review_score: Option<u8>,
     pub offset: Option<u16>,
+    /// RFC3339 timestamp of the last event — the frontend uses this to decide
+    /// whether the life-dot should *breathe* (recent activity) or sit calm. Motion
+    /// = real liveness, NOT the health label.
+    pub updated_at: String,
 }
 
 /// Build the sorted fleet view from raw spec states, deriving health at `now`.
@@ -50,6 +54,7 @@ pub fn fleet_snapshot(specs: Vec<SpecState>, now: DateTime<Utc>, stale_secs: i64
                 review_round: s.review_round,
                 review_score: s.review_score,
                 offset: s.offset,
+                updated_at: s.updated_at.to_rfc3339(),
             }
         })
         .collect();

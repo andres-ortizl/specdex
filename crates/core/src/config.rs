@@ -198,9 +198,16 @@ fn find_project_file(cwd: &Path) -> Option<PathBuf> {
     }
 }
 
-fn vault_path(name: &str) -> Result<PathBuf> {
+/// The single source of truth for where vaults live. Both the loader and
+/// `dex install` use this so the writer and reader never disagree (the install
+/// scaffold must land where `load_effective` looks).
+pub fn vaults_dir() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow!("could not resolve home directory"))?;
-    Ok(home.join(".config").join("dex").join("vaults").join(format!("{name}.toml")))
+    Ok(home.join(".config").join("dex").join("vaults"))
+}
+
+fn vault_path(name: &str) -> Result<PathBuf> {
+    Ok(vaults_dir()?.join(format!("{name}.toml")))
 }
 
 pub fn load_effective(cwd: &Path) -> Result<Effective> {

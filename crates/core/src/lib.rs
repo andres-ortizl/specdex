@@ -6,8 +6,8 @@ pub mod state;
 pub mod view;
 
 pub use config::{
-    get_dotted, load_effective, reactor_for, schema, validate, Action, Effective, HookPoint,
-    Identity, PortSpec, Providers,
+    get_dotted, load_effective, reactor_for, schema, validate, vaults_dir, Action, Effective,
+    HookPoint, Identity, PortSpec, Providers,
 };
 pub use event::{
     validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, Role, Verdict,
@@ -47,6 +47,32 @@ pub fn emit(project: &str, name: &str, payload: Payload) -> Result<SpecState> {
     state.apply(&payload, now);
     fs::write(&state_path, serde_json::to_string_pretty(&state)?)?;
     Ok(state)
+}
+
+/// Read one spec's snapshot, if it exists.
+pub fn load_state(project: &str, name: &str) -> Result<Option<SpecState>> {
+    let p = paths::state_path(project, name)?;
+    match fs::read_to_string(&p) {
+        Ok(txt) => Ok(serde_json::from_str(&txt).ok()),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Read a spec's full event log (for the detail timeline). Malformed lines are skipped.
+pub fn read_events(project: &str, name: &str) -> Result<Vec<Event>> {
+    let p = paths::events_path(project, name)?;
+    let mut out = Vec::new();
+    if let Ok(txt) = fs::read_to_string(&p) {
+        for line in txt.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            if let Ok(ev) = serde_json::from_str::<Event>(line) {
+                out.push(ev);
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Read every spec's snapshot across the whole registry.

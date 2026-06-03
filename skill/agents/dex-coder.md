@@ -1,5 +1,5 @@
 ---
-name: coder
+name: dex-coder
 description: "Implements plans produced by the planner. Writes code following TDD (RED/GREEN), parallelizes independent chunks via sub-agents. Follows strict style rules."
 model: sonnet
 tools: Read, Glob, Grep, Bash, Edit, Write, Agent, SendMessage

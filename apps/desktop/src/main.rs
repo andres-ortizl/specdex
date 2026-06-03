@@ -4,7 +4,7 @@ use std::sync::mpsc::channel;
 use std::time::Duration;
 
 use notify::{RecursiveMode, Watcher};
-use specdex_core::{fleet_snapshot, load_all, paths, FleetRow};
+use specdex_core::{fleet_snapshot, load_all, load_state, paths, read_events, FleetRow};
 use tauri::{AppHandle, Emitter};
 
 const STALE_SECS: i64 = 15 * 60;
@@ -22,13 +22,22 @@ fn fleet() -> Vec<FleetRow> {
     snapshot()
 }
 
+/// Full detail for one spec: snapshot state, derived health, and the event log.
+#[tauri::command]
+fn spec_detail(project: String, name: String) -> serde_json::Value {
+    let state = load_state(&project, &name).ok().flatten();
+    let health = state.as_ref().map(|s| s.health(chrono::Utc::now(), STALE_SECS).label().to_string());
+    let events = read_events(&project, &name).unwrap_or_default();
+    serde_json::json!({ "state": state, "health": health, "events": events })
+}
+
 fn emit_fleet(handle: &AppHandle) {
     let _ = handle.emit("fleet", snapshot());
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![fleet])
+        .invoke_handler(tauri::generate_handler![fleet, spec_detail])
         .setup(|app| {
             let handle = app.handle().clone();
             // Watch the registry off-thread; push a fresh snapshot to the webview on change.

@@ -1,5 +1,5 @@
 ---
-name: reviewer
+name: dex-reviewer
 description: "Reviews implementation for architecture issues, race conditions, scalability, code quality, and style rule violations. Reports PASS/FAIL with findings. Does not modify code."
 model: opus
 tools: Read, Glob, Grep, Bash, SendMessage

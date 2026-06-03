@@ -3,11 +3,14 @@ use std::sync::mpsc::channel;
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use clap::{Parser, Subcommand};
+use include_dir::{include_dir, Dir};
 use notify::{RecursiveMode, Watcher};
 use specdex_core::{
     emit, fleet_snapshot, get_dotted, load_all, load_effective, paths, pick_offset, schema,
     validate, validate_score, GateProvider, GateResult, NoteLevel, Payload, Phase, Role, Verdict,
 };
+
+static SKILL_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../skill");
 
 /// Resource-verb CLI. The target spec is ambient: set `DEX_SPEC=<project>/<name>`
 /// once (or pass `-s`). Every write is an event; state is derived.
@@ -108,6 +111,8 @@ enum Cmd {
         #[command(subcommand)]
         op: ConfigOp,
     },
+    /// Install specdex agents, skill, and config scaffold into ~/.claude and ~/.config/dex
+    Install,
 }
 
 #[derive(Subcommand)]
@@ -146,6 +151,7 @@ fn main() -> Result<()> {
         Cmd::Ls => return ls(),
         Cmd::Watch => return watch(),
         Cmd::Config { ref op } => return config_cmd(op),
+        Cmd::Install => return install(),
         _ => {}
     }
     let spec = cli
@@ -220,6 +226,66 @@ fn config_cmd(op: &ConfigOp) -> Result<()> {
     Ok(())
 }
 
+fn install() -> Result<()> {
+    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
+
+    let agents_dir = home.join(".claude").join("agents");
+    std::fs::create_dir_all(&agents_dir)?;
+
+    let embedded_agents = SKILL_DIR.get_dir("agents").ok_or_else(|| anyhow!("embedded skill/agents/ not found"))?;
+    let mut agents_written = 0usize;
+    for file in embedded_agents.files() {
+        let filename = file.path().file_name().unwrap_or_default();
+        let dest = agents_dir.join(filename);
+        std::fs::write(&dest, file.contents())?;
+        println!("  wrote {}", dest.display());
+        agents_written += 1;
+    }
+
+    let skill_dest = home.join(".claude").join("skills").join("spec");
+    if skill_dest.exists() {
+        println!(
+            "warning: ~/.claude/skills/spec already exists (e.g. a dotfiles symlink) — \
+remove it to let specdex manage the skill, then re-run `dex install`"
+        );
+    } else {
+        std::fs::create_dir_all(&skill_dest)?;
+        if let Some(skill_md) = SKILL_DIR.get_file("SKILL.md") {
+            let dest = skill_dest.join("SKILL.md");
+            std::fs::write(&dest, skill_md.contents())?;
+            println!("  wrote {}", dest.display());
+        }
+        if let Some(reference_dir) = SKILL_DIR.get_dir("reference") {
+            let ref_dest = skill_dest.join("reference");
+            std::fs::create_dir_all(&ref_dest)?;
+            for file in reference_dir.files() {
+                let filename = file.path().file_name().unwrap_or_default();
+                let dest = ref_dest.join(filename);
+                std::fs::write(&dest, file.contents())?;
+                println!("  wrote {}", dest.display());
+            }
+        }
+    }
+
+    // Use core's shared vaults_dir so the scaffold lands where load_effective looks.
+    let vaults_dir = specdex_core::vaults_dir()?;
+    std::fs::create_dir_all(&vaults_dir)?;
+    let default_vault = vaults_dir.join("default.toml");
+    if !default_vault.exists() {
+        std::fs::write(
+            &default_vault,
+            "[providers]\nnotifier = \"none\"\nci = \"none\"\npr_review = \"none\"\n",
+        )?;
+        println!("  wrote {}", default_vault.display());
+    } else {
+        println!("  skipped {} (already exists)", default_vault.display());
+    }
+
+    println!();
+    println!("install complete — {} agent(s) written to ~/.claude/agents/", agents_written);
+    Ok(())
+}
+
 fn build_payload(cmd: Cmd) -> Result<Payload> {
     Ok(match cmd {
         Cmd::Init { branch, worktree } => Payload::Init { branch, worktree },
@@ -255,7 +321,7 @@ fn build_payload(cmd: Cmd) -> Result<Payload> {
         Cmd::Note { level, topic, text } => {
             Payload::Note { level: parse_level(&level)?, topic, text }
         }
-        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } => {
+        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } | Cmd::Install => {
             unreachable!("handled before payload build")
         }
     })
