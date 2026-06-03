@@ -169,6 +169,19 @@ function renderMinion(row) {
 function renderFleet(rows) {
   const root = document.getElementById("fleet");
   root.textContent = "";
+  const count = document.getElementById("fleet-count");
+  if (!rows || rows.length === 0) {
+    const empty = el(
+      "div",
+      null,
+      'No active specs yet.<br><span style="font-size:13px">Start one with <code>/spec</code> — minions appear here as they run.</span>'
+    );
+    empty.style.cssText =
+      "grid-column:1/-1;color:var(--ink-faint);text-align:center;padding:56px 8px;line-height:1.7";
+    root.appendChild(empty);
+    count.textContent = "0 specs";
+    return;
+  }
   // sort: project then name, matching fleet_snapshot() in view.rs
   const sorted = [...rows].sort(
     (a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name)
