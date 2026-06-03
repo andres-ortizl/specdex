@@ -65,32 +65,37 @@ Derived health: `alive` · `idle` · `stale` (no heartbeat) · `needs-you` (bloc
 
 ## Configuration
 
-specdex is config-driven and vendor-neutral. A project declares its integrations in a committed `.dex.toml`; a **vault** supplies shared defaults + identity across projects.
+specdex is config-driven and vendor-neutral. Each project declares its integrations in a committed `.dex.toml` (the primary config); optional machine-wide defaults live in `~/.config/dex/config.toml`.
 
 ```toml
 # .dex.toml — at the repo root
-vault = "work"
-
 [providers]
 notifier  = "slack"          # slack | discord | none
 ci        = "github-actions" # the CI provider
 pr_review = "greptile"        # greptile | coderabbit | none  (reactor resolved from the registry)
 
-[[ports]]                     # a project that runs services locally; a CLI declares none
+[[ports]]                     # services this project runs locally; a CLI declares none
 service = "frontend"
 base    = 5173
 env     = "VITE_PORT"
+
+[phases]
+skip = ["verify"]             # optional: skip CI/bot-review for this project
 ```
 
 ```bash
-dex config show          # merged effective config (defaults ← vault ← project)
+dex config show          # merged effective config (defaults ← ~/.config/dex/config.toml ← project)
 dex config get providers.notifier
-dex config validate      # typed validation; nonzero on any violation
+dex config validate      # typed validation; warns on referenced skills not installed
 dex config schema        # the machine-readable option space (for self-configuration)
 dex ports alloc          # collision-aware port offset → `export` lines
 ```
 
-Vaults live at `~/.config/dex/vaults/<name>.toml` and can set providers, `identity` (`env_file`, `github_org`), and `phases.skip` (e.g. a personal vault that skips `verify` — no CI/CD).
+`~/.config/dex/config.toml` holds optional personal defaults (notifier, `identity`) inherited by every project.
+
+### Prerequisites
+
+The reactor/hook skills referenced by config are **external** (not bundled): `/pr` (ship), plus the configured `ci`/`pr_review` reactors (e.g. `/react-to-pipelines`, `/react-to-greptile`). Install those in `~/.claude/skills`; `dex config validate` warns if any are missing.
 
 ## The `/spec` loop
 
@@ -101,7 +106,7 @@ specdex is the substrate for the `/spec` skill (a separate agent skill, draft in
 A Cargo workspace, event-sourced end to end:
 
 ```
-crates/core   event schema (the contract) · ~/.spec scanner · state derivation · config/vaults
+crates/core   event schema (the contract) · ~/.spec scanner · state derivation · config
 crates/cli    `dex` — record events, config, ls/watch, ports alloc
 apps/desktop  Tauri app — wraps core's fleet snapshot + a notify watcher → live webview
 ```
@@ -110,4 +115,4 @@ The event envelope is CloudEvents-flavored (`type`/`time`/`source`/`subject`/`da
 
 ## Status
 
-Early. The substrate, CLI, config/vaults, and a live desktop fleet view work. The `/spec` skill rewrite and the spec-detail screen (per-run timeline + agent view) are in progress.
+Early. The substrate, CLI, config, and a live desktop fleet view work. The `/spec` skill rewrite and the spec-detail screen (per-run timeline + agent view) are in progress.

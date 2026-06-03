@@ -116,7 +116,6 @@ struct Layer {
     ports: Vec<PortSpec>,
     #[serde(default)]
     identity: Identity,
-    vault: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -198,41 +197,54 @@ fn find_project_file(cwd: &Path) -> Option<PathBuf> {
     }
 }
 
-/// The single source of truth for where vaults live. Both the loader and
-/// `dex install` use this so the writer and reader never disagree (the install
-/// scaffold must land where `load_effective` looks).
-pub fn vaults_dir() -> Result<PathBuf> {
+/// The optional global personal config: machine-wide defaults (notifier, identity)
+/// inherited by every project. Single source of truth shared by the loader and
+/// `dex install` so the scaffold lands where `load_effective` looks.
+pub fn config_path() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow!("could not resolve home directory"))?;
-    Ok(home.join(".config").join("dex").join("vaults"))
+    Ok(home.join(".config").join("dex").join("config.toml"))
 }
 
-fn vault_path(name: &str) -> Result<PathBuf> {
-    Ok(vaults_dir()?.join(format!("{name}.toml")))
+fn parse_layer_file(path: &Path) -> Result<Layer> {
+    let text = std::fs::read_to_string(path)?;
+    toml::from_str(&text).map_err(|e| anyhow!("parsing {}: {e}", path.display()))
 }
 
+/// Resolve effective config: built-in defaults ← `~/.config/dex/config.toml`
+/// (optional global) ← `<repo>/.dex.toml` (project, primary).
 pub fn load_effective(cwd: &Path) -> Result<Effective> {
     let mut layers: Vec<Layer> = Vec::new();
-
-    if let Some(project_path) = find_project_file(cwd) {
-        let text = std::fs::read_to_string(&project_path)?;
-        let project_layer: Layer = toml::from_str(&text)
-            .map_err(|e| anyhow!("parsing {}: {e}", project_path.display()))?;
-
-        if let Some(vault_name) = &project_layer.vault {
-            let vpath = vault_path(vault_name)?;
-            if vpath.exists() {
-                let vtext = std::fs::read_to_string(&vpath)?;
-                let vault_layer: Layer = toml::from_str(&vtext)
-                    .map_err(|e| anyhow!("parsing {}: {e}", vpath.display()))?;
-                layers.push(vault_layer);
-            }
+    if let Ok(global) = config_path() {
+        if global.exists() {
+            layers.push(parse_layer_file(&global)?);
         }
-        layers.push(project_layer);
     }
-
+    if let Some(project) = find_project_file(cwd) {
+        layers.push(parse_layer_file(&project)?);
+    }
     let eff = merge_layers(layers);
     validate(&eff)?;
     Ok(eff)
+}
+
+/// Skill refs this config points at (hook actions + provider reactors) — used to
+/// warn when a referenced skill isn't installed.
+pub fn referenced_skills(eff: &Effective) -> Vec<String> {
+    let mut out = Vec::new();
+    for action in eff.hooks.values() {
+        let Action::Skill { r#ref } = action;
+        out.push(r#ref.clone());
+    }
+    for (role, name) in [("ci", &eff.providers.ci), ("pr_review", &eff.providers.pr_review)] {
+        if let Some(n) = name {
+            if let Some(r) = reactor_for(role, n) {
+                out.push(r.to_string());
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
 }
 
 pub fn get_dotted(eff: &Effective, key: &str) -> Result<String> {
@@ -299,9 +311,9 @@ pub fn schema() -> serde_json::Value {
         "identity": { "fields": ["env_file", "github_org"] },
         "authoring": {
             "format": "toml",
-            "project_file": ".dex.toml at repo root; `vault = \"<name>\"` selects a vault",
-            "vault_file": "~/.config/dex/vaults/<name>.toml",
-            "merge": "defaults <- vault <- project (higher overrides per field)"
+            "project_file": ".dex.toml at repo root (primary config)",
+            "global_file": "~/.config/dex/config.toml (optional personal defaults)",
+            "merge": "defaults <- ~/.config/dex/config.toml <- project (higher overrides per field)"
         }
     })
 }

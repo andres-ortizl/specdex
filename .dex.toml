@@ -1,0 +1,7 @@
+vault = "personal"
+
+[providers]
+notifier = "slack"
+
+[identity]
+github_org = "andres-ortizl"

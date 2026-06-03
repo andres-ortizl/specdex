@@ -221,6 +221,15 @@ fn config_cmd(op: &ConfigOp) -> Result<()> {
         ConfigOp::Validate => {
             let eff = load_effective(&cwd)?;
             validate(&eff)?;
+            // Warn (don't fail) on referenced skills that aren't installed.
+            if let Some(home) = dirs::home_dir() {
+                let skills = home.join(".claude").join("skills");
+                for s in specdex_core::referenced_skills(&eff) {
+                    if !skills.join(s.trim_start_matches('/')).exists() {
+                        eprintln!("warning: referenced skill {s} not found in ~/.claude/skills");
+                    }
+                }
+            }
             println!("ok");
         }
         ConfigOp::Schema => {
@@ -271,18 +280,19 @@ re-run `dex install --update` to overwrite it, or remove it to let specdex manag
         }
     }
 
-    // Use core's shared vaults_dir so the scaffold lands where load_effective looks.
-    let vaults_dir = specdex_core::vaults_dir()?;
-    std::fs::create_dir_all(&vaults_dir)?;
-    let default_vault = vaults_dir.join("default.toml");
-    if !default_vault.exists() {
+    // Optional global config — scaffold at the path load_effective reads.
+    let config_file = specdex_core::config_path()?;
+    if let Some(parent) = config_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if !config_file.exists() {
         std::fs::write(
-            &default_vault,
-            "[providers]\nnotifier = \"none\"\nci = \"none\"\npr_review = \"none\"\n",
+            &config_file,
+            "# specdex global defaults (optional) — inherited by every project's .dex.toml\n[providers]\nnotifier = \"none\"\n",
         )?;
-        println!("  wrote {}", default_vault.display());
+        println!("  wrote {}", config_file.display());
     } else {
-        println!("  skipped {} (already exists)", default_vault.display());
+        println!("  skipped {} (already exists)", config_file.display());
     }
 
     println!();
