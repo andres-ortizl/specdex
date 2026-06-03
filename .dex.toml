@@ -2,6 +2,7 @@
 notifier = "slack"
 ci = "none"
 pr_review = "none"
+multiplexer = "zellij"
 
 [phases]
 skip = ["verify"]
