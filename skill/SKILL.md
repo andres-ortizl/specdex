@@ -95,6 +95,7 @@ This skill names **no** vendor. At setup, resolve the project's integrations onc
 NOTIFIER=$(dex config get providers.notifier)      # slack | discord | none
 CI=$(dex config get providers.ci)                  # github-actions | none
 PR_REVIEW=$(dex config get providers.pr_review)    # greptile | coderabbit | none
+MUX=$(dex config get providers.multiplexer)        # zellij | tmux | none ('' = autodetect)
 CI_REACTOR=$(dex config get providers.ci.reactor)            # e.g. /react-to-pipelines
 REVIEW_REACTOR=$(dex config get providers.pr_review.reactor) # e.g. /react-to-greptile
 SHIP_ACTION=$(dex config get hooks.on_ship)        # e.g. /pr
@@ -164,7 +165,8 @@ can't be inferred. The CLI is the typed brain; you supply the judgement.
    - `.github/workflows/*` ⇒ `ci = "github-actions"`.
    - `Cargo.toml` / a single binary / a library ⇒ no `[ports]`, often `ci`/`pr_review = "none"`.
    - existing PR-bot config (`.greptile`, coderabbit yaml) ⇒ the matching `pr_review`.
-4. **Ask only the ambiguous** (`AskUserQuestion`): which `notifier` (slack/discord/none)
+4. **Ask only the ambiguous** (`AskUserQuestion`): which `notifier` (slack/discord/none),
+   which `multiplexer` (zellij/tmux/none — default to whichever is currently detected via `$ZELLIJ_SESSION_NAME`/`$TMUX`),
    and confirm inferred `[ports]`. Don't ask what you inferred with confidence. (Global
    defaults like notifier/identity can live in `~/.config/dex/config.toml` instead.)
 5. **Edit `.dex.toml`** with the inferred/answered values (Edit the scaffolded file).
@@ -178,10 +180,12 @@ This mode does NOT run the dev loop — it only produces config. Run `/specdex <
 ### 0. Session persistence check
 
 The autonomous loop must survive the terminal closing, so it should run inside a
-terminal multiplexer. Detect which one (don't assume Zellij):
+terminal multiplexer. Resolve which one — config first, env fallback:
 
 ```bash
-if [ -n "$ZELLIJ_SESSION_NAME" ]; then MUX=zellij
+CONFIGURED_MUX=$(dex config get providers.multiplexer)
+if [ -n "$CONFIGURED_MUX" ]; then MUX=$CONFIGURED_MUX
+elif [ -n "$ZELLIJ_SESSION_NAME" ]; then MUX=zellij
 elif [ -n "$TMUX" ]; then MUX=tmux
 else MUX=none; fi
 ```
@@ -193,7 +197,7 @@ Per-multiplexer attach / detach (use `$MUX`'s in any later "resume" instructions
 | zellij | `zellij attach spec-<spec-name>` | `Ctrl+O, D` |
 | tmux | `tmux new -s spec-<spec-name>` | `Ctrl+B, D` |
 
-If `MUX=none`, warn before proceeding (offer whichever the user has — don't assume):
+If neither `$ZELLIJ_SESSION_NAME` nor `$TMUX` is set (not currently inside a session), warn before proceeding — name `$CONFIGURED_MUX` if set, otherwise offer both:
 
 > You're not inside a terminal multiplexer. If you close this terminal, the autonomous loop dies. Start one and re-run `/specdex` inside it — `zellij attach spec-<spec-name>` (detach `Ctrl+O, D`) or `tmux new -s spec-<spec-name>` (detach `Ctrl+B, D`). The loop then keeps running and you'll get notifications at each milestone.
 
