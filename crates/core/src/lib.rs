@@ -3,19 +3,24 @@ pub mod event;
 pub mod paths;
 pub mod ports;
 pub mod state;
+pub mod swarm;
 pub mod terminal;
 pub mod view;
 
 pub use config::{
-    config_path, get_dotted, load_effective, load_effective_opt, project_file, reactor_for,
-    referenced_skills, schema, validate, Action, Effective, HookPoint, Identity, Models, PortSpec,
-    Providers, Terminal,
+    config_path, config_view, get_dotted, load_effective, load_effective_opt, project_file,
+    reactor_for, referenced_skills, schema, validate, Action, ConfigView, Effective, HookPoint,
+    Identity, Models, PortSpec, Providers, ReactorView, Terminal,
 };
 pub use event::{
     validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, PrState, Role,
     SpecMode, Verdict,
 };
 pub use ports::pick_offset;
+pub use swarm::{
+    argv_contains_parent_session, find_swarm_socket, is_swarm_socket_name, read_team_panes,
+    watch_team_argv, PaneContent, TeamPanesResult,
+};
 pub use terminal::attach_argv;
 pub use state::{AgentSnapshot, GateSummary, Health, PrRef, SpecState, TestSummary};
 pub use view::{fleet_snapshot, AgentView, FleetRow};
@@ -28,12 +33,13 @@ use chrono::Utc;
 
 /// Append an event to the spec's `events.jsonl` and fold it into `state.json`.
 /// Returns the updated snapshot. This is the one write path the producer uses.
-pub fn emit(project: &str, name: &str, payload: Payload) -> Result<SpecState> {
+/// `actor` is "who" emitted this (lead / coder / reviewer / None for anonymous).
+pub fn emit(project: &str, name: &str, payload: Payload, actor: Option<&str>) -> Result<SpecState> {
     let now = Utc::now();
     let dir = paths::spec_dir(project, name)?;
     fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
 
-    let event = payload.clone().into_event(paths::source_str(project, name), now);
+    let event = payload.clone().into_event(paths::source_str(project, name), actor.map(String::from), now);
     let line = serde_json::to_string(&event)?;
     let mut f = OpenOptions::new()
         .create(true)
@@ -164,7 +170,7 @@ mod tests {
             blockers: 1,
             issues: 3,
         };
-        let ev = p.into_event("/spec/proj/feat".into(), Utc::now());
+        let ev = p.into_event("/spec/proj/feat".into(), None, Utc::now());
         let line = serde_json::to_string(&ev).unwrap();
         let back: Event = serde_json::from_str(&line).unwrap();
         assert_eq!(back.kind, "review.verdict");
@@ -199,7 +205,7 @@ mod tests {
         let mut s = SpecState::new("p".into(), "f".into(), now);
         assert_eq!(s.mode, SpecMode::Autonomous);
         s.apply(
-            &Payload::Init { branch: "b".into(), worktree: "/wt".into(), mode: SpecMode::Collaborative },
+            &Payload::Init { branch: "b".into(), worktree: "/wt".into(), mode: SpecMode::Collaborative, session_id: None },
             now,
         );
         assert_eq!(s.mode, SpecMode::Collaborative);

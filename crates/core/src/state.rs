@@ -49,6 +49,8 @@ pub struct SpecState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offset: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ports: Option<BTreeMap<String, u16>>,
@@ -81,6 +83,7 @@ impl SpecState {
             mode: SpecMode::Autonomous,
             branch: None,
             worktree: None,
+            session_id: None,
             offset: None,
             ports: None,
             pr: None,
@@ -99,10 +102,13 @@ impl SpecState {
     pub fn apply(&mut self, p: &Payload, now: DateTime<Utc>) {
         self.updated_at = now;
         match p {
-            Payload::Init { branch, worktree, mode } => {
+            Payload::Init { branch, worktree, mode, session_id } => {
                 self.branch = Some(branch.clone());
                 self.worktree = Some(worktree.clone());
                 self.mode = *mode;
+                if session_id.is_some() {
+                    self.session_id = session_id.clone();
+                }
             }
             Payload::PortsAssigned { offset, ports } => {
                 self.offset = Some(*offset);
@@ -201,5 +207,77 @@ impl Health {
             Health::Alive => "alive",
             Health::Idle => "idle",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::{Payload, SpecMode};
+    use chrono::Utc;
+
+    #[test]
+    fn init_with_session_id_sets_field() {
+        let now = Utc::now();
+        let mut s = SpecState::new("p".into(), "f".into(), now);
+        assert!(s.session_id.is_none());
+        s.apply(
+            &Payload::Init {
+                branch: "b".into(),
+                worktree: "/wt".into(),
+                mode: SpecMode::Autonomous,
+                session_id: Some("abc123".into()),
+            },
+            now,
+        );
+        assert_eq!(s.session_id.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn init_without_session_id_leaves_field_none() {
+        let now = Utc::now();
+        let mut s = SpecState::new("p".into(), "f".into(), now);
+        s.apply(
+            &Payload::Init {
+                branch: "b".into(),
+                worktree: "/wt".into(),
+                mode: SpecMode::Autonomous,
+                session_id: None,
+            },
+            now,
+        );
+        assert!(s.session_id.is_none());
+    }
+
+    #[test]
+    fn state_json_backward_compat_missing_session_id() {
+        let json = r#"{"project":"p","name":"f","phase":"setup","mode":"autonomous","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","agents":[]}"#;
+        let s: SpecState = serde_json::from_str(json).expect("old state.json should parse");
+        assert!(s.session_id.is_none());
+    }
+
+    #[test]
+    fn session_id_not_serialized_when_none() {
+        let now = Utc::now();
+        let s = SpecState::new("p".into(), "f".into(), now);
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(!json.contains("session_id"));
+    }
+
+    #[test]
+    fn session_id_serialized_when_some() {
+        let now = Utc::now();
+        let mut s = SpecState::new("p".into(), "f".into(), now);
+        s.apply(
+            &Payload::Init {
+                branch: "b".into(),
+                worktree: "/wt".into(),
+                mode: SpecMode::Autonomous,
+                session_id: Some("xyz".into()),
+            },
+            now,
+        );
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains("\"session_id\":\"xyz\""));
     }
 }

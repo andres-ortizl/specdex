@@ -186,9 +186,13 @@ pub struct Event {
     #[serde(rename = "type")]
     pub kind: String,
     pub time: DateTime<Utc>,
+    /// CloudEvents "source" = the spec path (always). Do NOT overload with actor.
     pub source: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
+    /// Who emitted this event (lead / coder / reviewer). Separate from `source`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
     #[serde(default, skip_serializing_if = "Value::is_null")]
     pub data: Value,
 }
@@ -197,7 +201,7 @@ pub struct Event {
 /// own `data`. This is what the CLI builds from args.
 #[derive(Debug, Clone)]
 pub enum Payload {
-    Init { branch: String, worktree: String, mode: SpecMode },
+    Init { branch: String, worktree: String, mode: SpecMode, session_id: Option<String> },
     PortsAssigned { offset: u16, ports: BTreeMap<String, u16> },
     PhaseEnter { phase: Phase, reason: Option<String> },
     Block { reason: String },
@@ -243,8 +247,12 @@ impl Payload {
 
     pub fn data(&self) -> Value {
         match self {
-            Payload::Init { branch, worktree, mode } => {
-                json!({ "branch": branch, "worktree": worktree, "mode": mode })
+            Payload::Init { branch, worktree, mode, session_id } => {
+                let mut m = json!({ "branch": branch, "worktree": worktree, "mode": mode });
+                if let Some(id) = session_id {
+                    m["session_id"] = json!(id);
+                }
+                m
             }
             Payload::PortsAssigned { offset, ports } => {
                 json!({ "offset": offset, "ports": ports })
@@ -279,13 +287,116 @@ impl Payload {
         }
     }
 
-    pub fn into_event(self, source: String, time: DateTime<Utc>) -> Event {
+    pub fn into_event(self, source: String, actor: Option<String>, time: DateTime<Utc>) -> Event {
         Event {
             kind: self.kind().to_string(),
             time,
             source,
             subject: self.subject(),
+            actor,
             data: self.data(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    #[test]
+    fn init_data_includes_session_id_when_some() {
+        let p = Payload::Init {
+            branch: "b".into(),
+            worktree: "/wt".into(),
+            mode: SpecMode::Autonomous,
+            session_id: Some("abc123".into()),
+        };
+        let data = p.data();
+        assert_eq!(data["session_id"], "abc123");
+    }
+
+    #[test]
+    fn init_data_omits_session_id_when_none() {
+        let p = Payload::Init {
+            branch: "b".into(),
+            worktree: "/wt".into(),
+            mode: SpecMode::Autonomous,
+            session_id: None,
+        };
+        let data = p.data();
+        assert!(data["session_id"].is_null());
+    }
+
+    #[test]
+    fn init_event_backward_compat_parses_without_session_id() {
+        let line = r#"{"type":"spec.created","time":"2024-01-01T00:00:00Z","source":"dex","data":{"branch":"b","worktree":"/wt","mode":"autonomous"}}"#;
+        let ev: Event = serde_json::from_str(line).expect("old event should parse");
+        assert_eq!(ev.kind, "spec.created");
+        assert_eq!(ev.data["branch"], "b");
+        assert!(ev.data["session_id"].is_null());
+    }
+
+    #[test]
+    fn init_event_roundtrip_with_session_id() {
+        let p = Payload::Init {
+            branch: "feat".into(),
+            worktree: "/wt".into(),
+            mode: SpecMode::Autonomous,
+            session_id: Some("sid1".into()),
+        };
+        let ev = p.into_event("dex".into(), None, Utc::now());
+        let json = serde_json::to_string(&ev).unwrap();
+        let back: Event = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.data["session_id"], "sid1");
+    }
+
+    #[test]
+    fn actor_set_in_event() {
+        let p = Payload::Heartbeat;
+        let ev = p.into_event("/spec/p/f".into(), Some("coder".into()), Utc::now());
+        assert_eq!(ev.actor.as_deref(), Some("coder"));
+        assert_eq!(ev.source, "/spec/p/f");
+    }
+
+    #[test]
+    fn actor_none_when_not_provided() {
+        let p = Payload::Heartbeat;
+        let ev = p.into_event("/spec/p/f".into(), None, Utc::now());
+        assert!(ev.actor.is_none());
+    }
+
+    #[test]
+    fn actor_not_serialized_when_none() {
+        let p = Payload::Heartbeat;
+        let ev = p.into_event("/spec/p/f".into(), None, Utc::now());
+        let json = serde_json::to_string(&ev).unwrap();
+        assert!(!json.contains("actor"));
+    }
+
+    #[test]
+    fn actor_serialized_and_roundtrips() {
+        let p = Payload::Heartbeat;
+        let ev = p.into_event("/spec/p/f".into(), Some("reviewer".into()), Utc::now());
+        let json = serde_json::to_string(&ev).unwrap();
+        let back: Event = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.actor.as_deref(), Some("reviewer"));
+        assert_eq!(back.source, "/spec/p/f");
+    }
+
+    #[test]
+    fn old_event_without_actor_parses_as_none() {
+        let line = r#"{"type":"heartbeat","time":"2024-01-01T00:00:00Z","source":"/spec/p/f"}"#;
+        let ev: Event = serde_json::from_str(line).expect("old event should parse");
+        assert!(ev.actor.is_none());
+        assert_eq!(ev.source, "/spec/p/f");
+    }
+
+    #[test]
+    fn source_and_actor_are_distinct_fields() {
+        let p = Payload::Heartbeat;
+        let ev = p.into_event("/spec/proj/feat".into(), Some("lead".into()), Utc::now());
+        assert_eq!(ev.source, "/spec/proj/feat");
+        assert_eq!(ev.actor.as_deref(), Some("lead"));
     }
 }
