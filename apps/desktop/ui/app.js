@@ -721,7 +721,13 @@ function boot() {
   const t = window.__TAURI__;
   if (t && t.core && t.event) {
     t.core.invoke("fleet").then(renderFleet).catch(() => renderFleet([]));
-    t.event.listen("fleet", (e) => renderFleet(e.payload || []));
+    t.event.listen("fleet", (e) => {
+      renderFleet(e.payload || []);
+      if (CURRENT_DETAIL && !document.getElementById("detail").hidden) {
+        // fleet payload only repaints the list; re-pull the open spec for live detail
+        loadDetail(CURRENT_DETAIL.state.project, CURRENT_DETAIL.state.name).then(renderDetail);
+      }
+    });
   } else {
     renderFleet(FLEET); // standalone prototype (design/ or a plain browser)
   }
