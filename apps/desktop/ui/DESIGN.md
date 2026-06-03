@@ -5,10 +5,17 @@ visualizes autonomous AI coding runs as a living **fleet**. Each running spec is
 **minion** — a small card that quietly carries a lifecycle phase, a health state, and
 0–2 working agents.
 
-The system is **zen, minimal, modern**: calm, generous negative space, a restrained
-palette, one accent used sparingly, and motion you feel more than see. It is a
-*single-window tool*, not a marketing site — every token is chosen for legibility at a
-glance and for hours of ambient watching without fatigue.
+The system is **minimal + tactile**: calm, generous negative space and a restrained
+palette, but the surfaces are **physical** — drams hardware, not flat web chrome.
+Cards are raised and lift toward you; toggles and buttons press; status reads as
+**glowing LEDs** and recessed sockets. It is a *single-window tool*, not a marketing
+site — every token is chosen for legibility at a glance and for hours of ambient
+watching without fatigue.
+
+> **Note (2026-06):** this system started near-flat (hairline rules, `box-shadow:
+> none`). It was deliberately re-skinned toward drams' *physical* component language —
+> soft layered depth, pressed wells, LED indicators. The sections below describe the
+> tactile system as shipped; `drams-components.html` is the live component reference.
 
 ---
 
@@ -23,10 +30,11 @@ system:
 | Near-black ink `rgb(38,38,38)` on off-white paper `#f7f7f7` / `#f4f4f4` | `--ink` / `--paper` — the whole light theme is built on this exact pair, not pure black-on-white (softer, calmer). |
 | **Inter** at weights **400 / 450 / 500**, 700 only rarely | Our type scale tops out at **560**; body is 400/450. No bold-heavy headings. |
 | Two accents: a calm blue `rgb(0,153,255)` and a warm orange `#FF611A`, used *sparingly* | Blue `#0a84ff` is the single interactive accent. The Drams orange inspired our **`needs-you`** ember `#e8601a` — the one warm hue, reserved for "a human is needed." |
-| Geometry is mostly **square** (`border-radius: 0`), with the occasional **4px**, and **circles** (`50%`) for dots/avatars | Cards use a quiet `10px`; the language is otherwise flat squares + perfect circles for the life-dot and agent pips. |
-| Almost no shadow — flatness, hairline rules, lots of whitespace | Shadows are near-invisible (ambient depth only); separation is done with `--rule` hairlines and space. |
+| Soft, rounded **hardware** corners — knobs, buttons, switch tracks | Cards use a soft `12px`; circles (`50%`) for the LED life-dot, agent pips, rail sockets, and the sidebar push-button. |
+| **Physical depth** — the components are raised plastic with soft drop shadows, pressed wells, dished faces | The `--lift` / `--lift-hover` / `--press` / `--well` token set. Cards are raised and lift on hover; toggles/buttons press in; rail sockets are recessed. Shadows are *soft and warm*, never harsh. |
+| The **LED indicator dot** — a small lit pip with a colored halo | The life-dot and active agent pips are radial-sheen LEDs with a `--hue` glow; the current rail node is a lit LED; the sidebar button's LED lights ember when expanded. |
 | Muted neutral grays `#6e6e6e`, `#cfcfcf` | `--ink-muted` / `--ink-faint` for secondary + tertiary text. |
-| Airy, unobtrusive, "shouldn't be taken too seriously" but never cartoonish | The minion is a *creature you read*, not an emoji. Personality comes from the breathing life-dot and posture, not faces. |
+| Airy, unobtrusive, "shouldn't be taken too seriously" but never cartoonish | The minion is a *creature you read*, not an emoji. Personality comes from the breathing LED and the tactile surfaces, not faces. |
 
 ---
 
@@ -104,7 +112,7 @@ Two surfaces deep, hairline rules, one interactive accent, five health hues.
 - **`needs-you` owns the only warm hue.** The ember `--needs` is the single point of
   warmth in the whole palette — that is *why* it draws the eye without an alarm. No red,
   no flashing, no badge-count anxiety.
-- Health is communicated by the **life-dot color + a hairline-tinted left edge**, never
+- Health is communicated by the **LED life-dot color + a thin tinted top edge**, never
   by recoloring the whole card. Calm > loud.
 
 ---
@@ -147,15 +155,25 @@ A **4px base grid**. Density is "airy desktop" — comfortable, not cramped, not
 --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
 --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
 
---r-card: 10px;   /* minion card — the one soft corner */
---r-pill: 999px;  /* pips, dots, the phase rail nodes */
---r-chip: 6px;    /* phase chip, small tags */
+--r-card: 12px;   /* minion card, spec-doc well — soft hardware corners */
+--r-pill: 999px;  /* LED dots, rail sockets, toggle track, chips */
+--r-chip: 6px;    /* small tags, the attach button */
 ```
 
-- **Shadows are ambient, not decorative** (see tokens above) — from Drams' near-flatness.
-  Lift only on hover/focus, and only slightly.
-- Separation is carried by `--rule` hairlines and whitespace first; shadow is the last
-  resort.
+**Depth tokens** — the tactile system. Soft, warm, layered; never harsh:
+
+```css
+--lift:       /* a raised surface (cards, buttons, timeline nodes) */
+--lift-1:     /* a lighter raise (knobs, chips, the sidebar button) */
+--lift-hover: /* lifts toward you on hover */
+--press:      /* an inset/recessed press (toggle track, pressed button, spec-doc well) */
+--well:       /* the flat color of an empty recessed socket (rail sockets/grooves) */
+```
+
+- **Depth carries the hardware feel.** Raised cards/buttons use `--lift`; recessed
+  wells and pressed states use `--press`; the rail's empty sockets use `--well`.
+- Cards **lift on hover** (`--lift-hover` + `translateY(-2px)`); buttons press on
+  `:active`. Motion + depth = the tactile response.
 - Card min-width ~280px, grid auto-fills; gutters `--s-4`. The fleet breathes.
 
 ---
@@ -176,8 +194,11 @@ Principles:
    scale pulse on the health dot (~2.6s for `alive`, slower/none for calmer states).
    Nothing else animates on idle.
 2. **Enter/leave is a settle, not a pop.** New minions fade + rise `6px` over `--dur-slow`;
-   leaving ones fade + drop. No bounce (despite Drams' playful "bouncin' ball" — we keep
-   the calm, not the toy).
+   leaving ones fade + drop. No bounce — the playfulness lives in the *tactile* response,
+   not in springy entrances.
+2b. **Tactile response.** Cards lift toward you on hover (`--lift-hover` + `-2px`);
+   buttons and the sidebar push-button press in on `:active`; the toggle knob slides with
+   a slight spring. Depth changing under the cursor is the "feel" of the hardware.
 3. **State changes cross-fade** the dot color and left-edge tint over `--dur`. A phase
    advance slides the rail node, it doesn't jump.
 4. **Respect `prefers-reduced-motion`** — all looping/transform animation is disabled;
@@ -210,8 +231,9 @@ bottom-right:
    `--*-soft`. This is the ambient "how is it doing" read from across the room. Calm
    tint, never a fill.
 
-2. **Life-dot** (`--r-pill`, 9px) — sits before the name. Its **color = health**, and
-   its **motion = liveness**:
+2. **Life-dot** — a glowing **LED** (`--r-pill`, 9px): a radial sheen over the `--hue`
+   plus a colored halo (`box-shadow`). Its **color = health**, and its **motion =
+   liveness**:
    - `alive` — `--alive` green, **breathing** (2.6s pulse).
    - `idle` — `--idle` neutral gray, **steady**, slightly dimmed. At rest.
    - `stale` — `--stale` amber, **steady + a faint dashed ring** (heartbeat missed).
@@ -222,11 +244,11 @@ bottom-right:
 3. **Name** (`--t-name`) — the spec name, the identity. Project path sits beneath in
    mono `--ink-muted` (the `project` field).
 
-4. **Phase rail** — 8 nodes for `setup · plan · build · review · ship · verify ·
-   complete · accepted`. Nodes *before* current = filled `--ink-faint`; *current* = a
-   ring in the health color; *after* = hollow `--rule`. A hairline connects them. This is
-   the lifecycle at a glance; it reads like progress without a percentage bar's pressure.
-   The current phase name shows below as an uppercase micro-label.
+4. **Phase rail** — a hardware progress strip of 8 sockets for `setup · plan · build ·
+   review · ship · verify · complete · accepted`. *Before* current = quietly-lit
+   `--ink-faint` pips; *current* = a **glowing LED in the health hue**; *after* =
+   recessed empty `--well` sockets. Sunk grooves connect them. Reads like progress
+   without a percentage bar's pressure. The current phase name shows below as a label.
 
 5. **Agent pips** — up to two: `coder`, `reviewer`. A filled pip = `active:true`, a
    hollow ring = present but `active:false`. Active pips inherit the breathing of the
@@ -265,9 +287,13 @@ spec "maturing" left-to-right without any extra styling.
 ## 7. Files
 
 - `DESIGN.md` — this document.
-- `index.html` — the prototype shell (topbar, theme toggle, fleet grid).
-- `style.css` — all tokens + the minion component, light & dark.
+- `index.html` — the prototype shell (topbar, soft theme toggle, sidebar, fleet grid).
+- `style.css` — all tokens (incl. the `--lift`/`--press`/`--well` depth set) + every
+  component, light & dark.
 - `app.js` — renders ~6 hardcoded sample minions (every health state, several phases)
-  from the `FleetRow` shape, and wires the `system → light → dark` toggle.
+  from the `FleetRow` shape, and wires the 2-position `light ↔ dark` soft toggle.
+- `drams-components.html` — self-contained reference gallery of the tactile components
+  (soft toggle, push buttons, slider, rotary dial, segmented switch) in the palette.
 
-Open `index.html` directly in a browser — no build step, no framework, no CDN.
+Open `index.html` or `drams-components.html` directly in a browser — no build step, no
+framework, no CDN.

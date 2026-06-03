@@ -35,16 +35,12 @@
   --needs: var(--ember);  --needs-soft: var(--ember-soft);
   --done:  #5a86c4;  --done-soft:  #e7eef8;
 
-  /* the signature: a 1px inset hairline ring; ember on hover */
-  --ring:       inset 0 0 0 1px var(--rule);
-  --ring-hover: inset 0 0 0 1px var(--ember);
-
-  /* drams hardware = soft layered depth: a raised surface, a sunk well,
+  /* drams hardware = soft layered depth: a raised surface, a pressed well,
      and a hover lift. Light-warm shadows, never harsh. */
   --lift:       0 1px 2px rgba(40,38,34,.08), 0 4px 10px rgba(40,38,34,.07), 0 10px 22px rgba(40,38,34,.05);
   --lift-1:     0 1px 2px rgba(40,38,34,.09), 0 2px 5px rgba(40,38,34,.07);
   --lift-hover: 0 2px 4px rgba(40,38,34,.10), 0 8px 18px rgba(40,38,34,.10), 0 18px 40px rgba(40,38,34,.08);
-  --sunk:       inset 0 1px 2px rgba(40,38,34,.12), inset 0 -1px 1px rgba(255,255,255,.6);
+  --press:      inset 0 1px 2px rgba(40,38,34,.12), inset 0 -1px 1px rgba(255,255,255,.6);  /* pressed/recessed */
   --well:       #e6e4df;        /* a recessed empty socket (rail nodes, grooves) */
 
   /* type — drams Inter, weights 400/450/500, 16px body rhythm */
@@ -91,13 +87,10 @@
   --needs: var(--ember);  --needs-soft: var(--ember-soft);
   --done:  #7ba6e0;  --done-soft:  #1c2533;
 
-  --ring:       inset 0 0 0 1px var(--rule);
-  --ring-hover: inset 0 0 0 1px var(--ember);
-
   --lift:       0 1px 2px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.4), 0 12px 26px rgba(0,0,0,.34);
   --lift-1:     0 1px 2px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.38);
   --lift-hover: 0 2px 5px rgba(0,0,0,.5), 0 10px 22px rgba(0,0,0,.45), 0 22px 48px rgba(0,0,0,.4);
-  --sunk:       inset 0 1px 3px rgba(0,0,0,.5), inset 0 -1px 1px rgba(255,255,255,.04);
+  --press:      inset 0 1px 3px rgba(0,0,0,.5), inset 0 -1px 1px rgba(255,255,255,.04);
   --well:       #100e09;
 }
 
@@ -191,8 +184,8 @@ h1, h2 { margin: 0; }
 .t-track {
   display: block; position: relative;
   width: 46px; height: 26px; border-radius: var(--r-pill);
-  background: linear-gradient(180deg, var(--sunk-a, #ebeae7), var(--sunk-b, #f3f2ef));
-  box-shadow: var(--sunk);
+  background: linear-gradient(180deg, var(--track-a, #ebeae7), var(--track-b, #f3f2ef));
+  box-shadow: var(--press);
   transition: background var(--dur) var(--ease-soft);
 }
 .t-knob {
@@ -208,7 +201,7 @@ h1, h2 { margin: 0; }
     color-mix(in srgb, var(--accent) 24%, #e9e8e5),
     color-mix(in srgb, var(--accent) 14%, #f1f0ed));
 }
-:root[data-theme="dark"] .t-track { --sunk-a: #15130e; --sunk-b: #1d1a14; }
+:root[data-theme="dark"] .t-track { --track-a: #15130e; --track-b: #1d1a14; }
 :root[data-theme="dark"] .t-knob {
   background: radial-gradient(circle at 36% 30%, #45413a, #2f2c24 75%, #232019);
 }
@@ -543,10 +536,10 @@ h1, h2 { margin: 0; }
   font-weight: 450;
   letter-spacing: -0.01em;
   color: var(--hue);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 30%, transparent);
-  padding: 4px 10px;
-  border-radius: var(--r-chip);
+  background: var(--surface);
+  box-shadow: var(--lift-1), inset 0 0 0 1px color-mix(in srgb, var(--hue) 22%, transparent);
+  padding: 5px 11px;
+  border-radius: var(--r-pill);
 }
 .d-health .life-dot { width: 7px; height: 7px; }
 
@@ -559,15 +552,17 @@ h1, h2 { margin: 0; }
   font-size: 13px;
   font-family: var(--font-mono);
   color: var(--ink-muted);
-  background: transparent;
+  background: var(--surface);
   border: none;
-  box-shadow: var(--ring);
+  box-shadow: var(--lift-1);          /* a raised push-button */
   border-radius: var(--r-chip);
   padding: 7px 12px;
   cursor: pointer;
-  transition: box-shadow var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  transition: box-shadow var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
 }
-.d-attach:hover { color: var(--ink); box-shadow: var(--ring-hover); }
+.d-attach:hover { color: var(--ink); box-shadow: var(--lift); transform: translateY(-1px); }
+.d-attach:active { box-shadow: var(--press); transform: translateY(1px); }
 .d-attach:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .d-attach svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
 
@@ -676,8 +671,8 @@ h1, h2 { margin: 0; }
   width: 21px; height: 21px;
   display: grid; place-items: center;
   border-radius: var(--r-pill);
-  background: var(--paper);
-  box-shadow: inset 0 0 0 1px var(--rule);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  box-shadow: var(--lift-1);          /* a small raised node on the spine */
   color: var(--ink-muted);
   z-index: 1;
   margin-top: -1px;
@@ -712,14 +707,14 @@ h1, h2 { margin: 0; }
 /* milestones — phase changes carry the hue ring, a touch more weight */
 .tl-row.milestone .tl-glyph {
   color: var(--hue);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 45%, transparent);
+  box-shadow: var(--lift-1), inset 0 0 0 1px color-mix(in srgb, var(--hue) 45%, transparent);
 }
 .tl-row.milestone .tl-summary { color: var(--ink); }
 
 /* attention — blocked / note draw a little more (ember ring, never loud) */
 .tl-row.attn .tl-glyph {
   color: var(--ember);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ember) 50%, transparent);
+  box-shadow: var(--lift-1), inset 0 0 0 1px color-mix(in srgb, var(--ember) 50%, transparent);
 }
 .tl-row.attn .tl-summary { color: var(--ember); }
 
@@ -816,7 +811,7 @@ h1, h2 { margin: 0; }
               box-shadow var(--dur-fast) var(--ease);
 }
 .sb-project.open .sb-btn {
-  box-shadow: var(--sunk);            /* pressed in */
+  box-shadow: var(--press);           /* pressed in */
   transform: translateY(1px);
 }
 .sb-project.open .sb-btn::after {     /* LED lit */
@@ -910,7 +905,7 @@ h1, h2 { margin: 0; }
   word-break: break-word;
   background: var(--sunk);
   border-radius: var(--r-card);
-  box-shadow: var(--ring);
+  box-shadow: var(--press);           /* a recessed well the text sits in */
   padding: var(--s-4);
   max-height: 440px;
   overflow: auto;
@@ -919,6 +914,64 @@ h1, h2 { margin: 0; }
   color: var(--ink-faint);
   font-style: italic;
   font-family: var(--font-sans);
+}
+
+/* ============================ detail tabs ============================ */
+/* one panel, three sources (events.json / spec.md / logbook.md), switched by a
+   row of drams push-buttons. The active tab is pressed-in with a lit LED. */
+
+.d-panel { display: flex; flex-direction: column; gap: var(--s-4); }
+
+.d-tabs { display: flex; gap: var(--s-2); }
+
+.d-tab {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink-muted);
+  background: var(--surface);
+  border: none;
+  box-shadow: var(--lift-1);          /* a raised push-button */
+  border-radius: var(--r-pill);
+  padding: 7px 14px 7px 12px;
+  cursor: pointer;
+  transition: box-shadow var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
+}
+.d-tab::before {                      /* the LED, dark until selected */
+  content: "";
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--well);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.25);
+  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.d-tab:hover { color: var(--ink); transform: translateY(-1px); box-shadow: var(--lift); }
+.d-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.d-tab.active {
+  color: var(--ink);
+  box-shadow: var(--press);           /* pressed in */
+}
+.d-tab.active:hover { transform: none; box-shadow: var(--press); }
+.d-tab.active::before {               /* LED lit */
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 45%, #fff), var(--accent));
+  box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+/* timeline header: a single relative "updated Xm ago" + a UTC hint, since each
+   row now carries an exact UTC stamp. */
+.tl-head-left { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+.tl-updated {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.tl-utc-note {
+  font-size: 11px;
+  letter-spacing: -0.01em;
+  color: var(--ink-faint);
 }
 
 /* ============================ reduced motion ============================ */
