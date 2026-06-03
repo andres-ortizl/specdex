@@ -4,8 +4,8 @@ pub mod paths;
 pub mod state;
 
 pub use config::{
-    get_dotted, load_effective, reactor_for, validate, Action, Effective, HookPoint, Identity,
-    Providers,
+    get_dotted, load_effective, reactor_for, schema, validate, Action, Effective, HookPoint,
+    Identity, Providers,
 };
 pub use event::{
     validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, Ports, Role,

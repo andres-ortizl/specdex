@@ -2,8 +2,8 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use specdex_core::{
-    emit, get_dotted, load_all, load_effective, validate, validate_score, GateProvider, GateResult,
-    NoteLevel, Payload, Phase, Ports, Role, Verdict,
+    emit, get_dotted, load_all, load_effective, schema, validate, validate_score, GateProvider,
+    GateResult, NoteLevel, Payload, Phase, Ports, Role, Verdict,
 };
 
 /// Resource-verb CLI. The target spec is ambient: set `DEX_SPEC=<project>/<name>`
@@ -110,6 +110,8 @@ enum ConfigOp {
     Get { key: String },
     /// Validate config and exit nonzero on any violation
     Validate,
+    /// Print the machine-readable config surface (valid providers, hooks, phases)
+    Schema,
 }
 
 #[derive(Subcommand)]
@@ -156,6 +158,9 @@ fn config_cmd(op: &ConfigOp) -> Result<()> {
             let eff = load_effective(&cwd)?;
             validate(&eff)?;
             println!("ok");
+        }
+        ConfigOp::Schema => {
+            println!("{}", serde_json::to_string_pretty(&schema())?);
         }
     }
     Ok(())

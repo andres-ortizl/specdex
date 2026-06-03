@@ -240,6 +240,40 @@ pub fn get_dotted(eff: &Effective, key: &str) -> Result<String> {
     }
 }
 
+/// Machine-readable description of the config surface, sourced from the live
+/// REGISTRY + enums (NOT the struct types — the "which providers are valid per
+/// role" constraint lives in the registry, which a type-derived JSON Schema can't
+/// express). Consumed by `/spec configure` for LLM self-configuration and by humans.
+pub fn schema() -> serde_json::Value {
+    use serde_json::json;
+    let mut providers = serde_json::Map::new();
+    for role in ["notifier", "ci", "pr_review"] {
+        let valid: Vec<&str> =
+            REGISTRY.iter().filter(|(_, d)| d.role == role).map(|(n, _)| *n).collect();
+        let reactors: serde_json::Map<String, serde_json::Value> = REGISTRY
+            .iter()
+            .filter(|(_, d)| d.role == role)
+            .filter_map(|(n, d)| d.reactor.map(|r| (n.to_string(), json!(r))))
+            .collect();
+        providers.insert(role.to_string(), json!({ "valid": valid, "reactors": reactors }));
+    }
+    json!({
+        "providers": providers,
+        "hooks": {
+            "points": ["on_ship", "on_verify_ci", "on_verify_review"],
+            "value": "a skill ref string (e.g. \"/pr\") or { kind = \"skill\", ref = \"/pr\" }"
+        },
+        "phases_skip": { "valid": VALID_PHASES },
+        "identity": { "fields": ["env_file", "github_org"] },
+        "authoring": {
+            "format": "toml",
+            "project_file": ".dex.toml at repo root; `vault = \"<name>\"` selects a vault",
+            "vault_file": "~/.config/dex/vaults/<name>.toml",
+            "merge": "defaults <- vault <- project (higher overrides per field)"
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -398,6 +432,17 @@ mod tests {
         "#);
         let eff = merge_layers(vec![layer]);
         assert!(validate(&eff).is_ok());
+    }
+
+    #[test]
+    fn schema_is_registry_sourced() {
+        let s = schema();
+        let pr = &s["providers"]["pr_review"];
+        let valid: Vec<&str> = pr["valid"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(valid.contains(&"greptile") && valid.contains(&"coderabbit"));
+        assert_eq!(pr["reactors"]["greptile"], "/react-to-greptile");
+        assert_eq!(s["phases_skip"]["valid"].as_array().unwrap().len(), 8);
+        assert!(s["hooks"]["points"].as_array().unwrap().iter().any(|v| v == "on_ship"));
     }
 
     #[test]
