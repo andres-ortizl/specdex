@@ -121,6 +121,7 @@ function sampleDetail(project, name) {
       ],
       doc: "# verify-flake\n\nStabilize the flaky results-serializer test under CI load.\n\n## Acceptance Criteria\n- [ ] test passes 50× in a row locally\n- [ ] no N+1 query in the results serializer\n",
       logbook: "# verify-flake — logbook\n\nStatus: BLOCKED\n\n- 95m ago — spec created, worktree + ports assigned\n- 80m ago — build started (coder c-7a1)\n- 60m ago — tests green (320 passed)\n- 45m ago — review round 1: changes requested (1 blocker, 3 issues)\n- 30m ago — addressing review feedback\n- 20m ago — review round 2: approved\n- 18m ago — PR #4012 created\n- 14m ago — CI gate failed (infra flake)\n- 12m ago — BLOCKED: needs a human CI re-run\n",
+      config_raw: sampleConfigRaw(project),
     };
   }
   // Generic calm sample for any other card.
@@ -155,6 +156,7 @@ function sampleDetail(project, name) {
       ? "# " + name + "\n\nHuman-driven session — planning live with the lead.\n"
       : null,
     logbook: "# " + name + " — logbook\n\nStatus: " + row.phase.toUpperCase() + "\n\n- 60m ago — spec created\n- 40m ago — entered " + row.phase + "\n- 10m ago — working through the " + row.phase + " step\n",
+    config_raw: sampleConfigRaw(project),
   };
 }
 
@@ -191,6 +193,27 @@ service = "frontend"
 base = 5173
 env = "VITE_PORT"
 `;
+}
+
+// Curated config summary for the standalone prototype sidebar (no Tauri backend).
+function sampleConfig(project) {
+  if (project === "specdex") {
+    return {
+      providers: { notifier: "none", ci: "none", pr_review: "none" },
+      terminal: { program: "ghostty" },
+      identity: { github_org: "andres-ortizl" },
+      ports: [], models: {}, phases_skip: [],
+    };
+  }
+  return {
+    providers: { notifier: "slack", ci: "github-actions", pr_review: "greptile" },
+    ports: [
+      { service: "backend", base: 8000, env: "BACKEND_PORT" },
+      { service: "frontend", base: 5173, env: "VITE_PORT" },
+    ],
+    models: { coder: "sonnet", reviewer: "opus" },
+    phases_skip: [],
+  };
 }
 
 const ICONS = {
@@ -393,10 +416,10 @@ function renderMinion(row) {
 
 let LAST_FLEET = [];
 
-// Sidebar state: which projects are expanded + per-project raw-toml cache.
-// SB_TOML: undefined = not fetched, "loading", null = none, or raw toml string.
+// Sidebar state: which projects are expanded + a per-project config cache
+// (undefined = not fetched, "loading", null = none, or the Effective object).
 const SB_EXPANDED = new Set();
-const SB_TOML = {};
+const SB_CONFIG = {};
 
 function renderFleet(rows) {
   LAST_FLEET = rows || [];
@@ -489,58 +512,77 @@ function renderSidebar(rows) {
       const body = el("div", "sb-proj-body");
       body.appendChild(renderConfig(project));
       section.appendChild(body);
-      loadTomlIfNeeded(project);
+      loadConfigIfNeeded(project);
     }
     root.appendChild(section);
   });
 }
 
-function hlToml(raw) {
-  const esc = raw
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return esc.split("\n").map((line) => {
-    if (/^\s*#/.test(line)) return `<span class="tk-comment">${line}</span>`;
-    if (/^\s*\[/.test(line)) return `<span class="tk-section">${line}</span>`;
-    return line
-      .replace(/^(\s*[\w.-]+\s*=\s*)/, '<span class="tk-key">$1</span>')
-      .replace(/"([^"]*)"/g, '"<span class="tk-str">$1</span>"');
-  }).join("\n");
+function cfgRow(k, v) {
+  const row = el("div", "sb-cfg-row");
+  const key = el("span", "sb-cfg-key");
+  key.textContent = k;
+  const val = el("span", "sb-cfg-val");
+  val.textContent = v;
+  val.title = v;
+  row.append(key, val);
+  return row;
 }
 
+// Read-only at-a-glance summary — only the fields that are set. The full
+// verbatim .dex.toml lives in the spec detail's `.dex.toml` tab.
 function renderConfig(project) {
-  const toml = SB_TOML[project];
-  if (toml === undefined || toml === "loading") {
-    const wrap = el("div", "sb-config muted");
-    wrap.textContent = "loading…";
+  const wrap = el("div", "sb-config");
+  const cfg = SB_CONFIG[project];
+  if (cfg === undefined || cfg === "loading") {
+    wrap.classList.add("muted");
+    wrap.appendChild(cfgRow("config", "loading…"));
     return wrap;
   }
-  if (!toml) {
-    const wrap = el("div", "sb-config muted");
-    wrap.textContent = "none";
+  if (cfg === null) {
+    wrap.classList.add("muted");
+    wrap.appendChild(cfgRow("config", "none"));
     return wrap;
   }
-  const pre = el("pre", "sb-toml");
-  pre.innerHTML = hlToml(toml);
-  return pre;
+  const rows = [];
+  const p = cfg.providers || {};
+  ["notifier", "ci", "pr_review", "multiplexer"].forEach((k) => {
+    if (p[k]) rows.push([k.replace("_", " "), p[k]]);
+  });
+  const m = cfg.models || {};
+  ["coder", "reviewer", "designer", "curator"].forEach((k) => { if (m[k]) rows.push([k, m[k]]); });
+  if (cfg.terminal && cfg.terminal.program) rows.push(["terminal", cfg.terminal.program]);
+  if (cfg.ports && cfg.ports.length) rows.push(["ports", cfg.ports.map((x) => x.service).join(", ")]);
+  if (cfg.phases_skip && cfg.phases_skip.length) rows.push(["skip", cfg.phases_skip.join(", ")]);
+  if (cfg.identity && cfg.identity.github_org) rows.push(["github", cfg.identity.github_org]);
+  if (cfg.hooks && Object.keys(cfg.hooks).length) {
+    const refs = Object.values(cfg.hooks).map((a) => (a && a.ref) || a).filter(Boolean).join(", ");
+    if (refs) rows.push(["hooks", refs]);
+  }
+  if (rows.length === 0) {
+    wrap.classList.add("muted");
+    wrap.appendChild(cfgRow("config", "empty"));
+    return wrap;
+  }
+  rows.forEach(([k, v]) => wrap.appendChild(cfgRow(k, v)));
+  return wrap;
 }
 
-async function loadProjectConfigRaw(project) {
+async function loadProjectConfig(project) {
   const t = window.__TAURI__;
   if (t && t.core) {
-    try { return await t.core.invoke("project_config_raw", { project }); }
+    try { return await t.core.invoke("project_config", { project }); }
     catch (_) { return null; }
   }
-  return sampleConfigRaw(project);
+  return sampleConfig(project);
 }
 
-function loadTomlIfNeeded(project) {
-  if (SB_TOML[project] !== undefined) return;
-  SB_TOML[project] = "loading";
-  loadProjectConfigRaw(project)
-    .then((raw) => { SB_TOML[project] = raw || null; renderSidebar(LAST_FLEET); })
-    .catch(() => { SB_TOML[project] = null; renderSidebar(LAST_FLEET); });
+function loadConfigIfNeeded(project) {
+  if (SB_CONFIG[project] !== undefined) return; // cached, loading, or known-null
+  SB_CONFIG[project] = "loading";
+  loadProjectConfig(project)
+    .then((cfg) => { SB_CONFIG[project] = cfg || null; renderSidebar(LAST_FLEET); })
+    .catch(() => { SB_CONFIG[project] = null; renderSidebar(LAST_FLEET); });
 }
 
 // ============================ detail ============================
@@ -856,8 +898,8 @@ function renderDetail(detail) {
 
 let DETAIL_TAB = "events";
 
-// One panel, three sources: the event log, spec.md, logbook.md — switched by a
-// row of drams push-buttons.
+// One panel, four sources: the event log, spec.md, logbook.md, and the project's
+// .dex.toml — switched by a row of drams push-buttons.
 function renderDetailPanel(detail) {
   const wrap = el("div", "d-panel");
 
@@ -866,6 +908,7 @@ function renderDetailPanel(detail) {
     ["events", "events.json"],
     ["spec", "spec.md"],
     ["logbook", "logbook.md"],
+    ["config", ".dex.toml"],
   ].forEach(([key, lbl]) => {
     const b = el("button", "d-tab" + (DETAIL_TAB === key ? " active" : ""));
     b.type = "button";
@@ -883,12 +926,36 @@ function renderDetailPanel(detail) {
   else if (DETAIL_TAB === "spec") {
     if (detail.doc && detail.doc.trim()) wrap.appendChild(renderMarkdown(detail.doc));
     else { const p = el("p", "md-empty"); p.textContent = "No spec.md for this spec."; wrap.appendChild(p); }
-  } else {
+  } else if (DETAIL_TAB === "logbook") {
     if (detail.logbook && detail.logbook.trim()) wrap.appendChild(renderMarkdown(detail.logbook));
     else { const p = el("p", "md-empty"); p.textContent = "No logbook.md for this spec."; wrap.appendChild(p); }
+  } else {
+    wrap.appendChild(renderTomlDoc(detail.config_raw));
   }
 
   return wrap;
+}
+
+// The project's verbatim .dex.toml, line-tinted. Highlighting is per line and
+// strings are wrapped before the key so the key span's attribute quotes are
+// never re-scanned (the cause of an earlier mangled render).
+function renderTomlDoc(raw) {
+  const pre = el("pre", "toml-doc");
+  if (!raw || !raw.trim()) {
+    pre.classList.add("empty");
+    pre.textContent = "No .dex.toml for this project.";
+    return pre;
+  }
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  pre.innerHTML = raw.split("\n").map((line) => {
+    const e = esc(line);
+    if (/^\s*#/.test(e)) return `<span class="tk-comment">${e}</span>`;
+    if (/^\s*\[/.test(e)) return `<span class="tk-section">${e}</span>`;
+    return e
+      .replace(/"[^"]*"/g, (m) => `<span class="tk-str">${m}</span>`)
+      .replace(/^(\s*)([\w.-]+)(\s*=)/, '$1<span class="tk-key">$2</span>$3');
+  }).join("\n");
+  return pre;
 }
 
 function renderMarkdown(text) {

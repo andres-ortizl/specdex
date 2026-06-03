@@ -25,8 +25,8 @@ fn fleet() -> Vec<FleetRow> {
     snapshot()
 }
 
-/// Full detail for one spec: snapshot state, derived health, the event log, and
-/// the `spec.md` / `logbook.md` docs (if present).
+/// Full detail for one spec: snapshot state, derived health, the event log, the
+/// `spec.md` / `logbook.md` docs, and the project's raw `.dex.toml` (if present).
 #[tauri::command]
 fn spec_detail(project: String, name: String) -> serde_json::Value {
     let state = load_state(&project, &name).ok().flatten();
@@ -34,19 +34,14 @@ fn spec_detail(project: String, name: String) -> serde_json::Value {
     let events = read_events(&project, &name).unwrap_or_default();
     let doc = load_spec_doc(&project, &name).ok().flatten();
     let logbook = load_logbook(&project, &name).ok().flatten();
-    serde_json::json!({ "state": state, "health": health, "events": events, "doc": doc, "logbook": logbook })
+    let config_raw = specdex_core::project_config_raw(&project).ok().flatten();
+    serde_json::json!({ "state": state, "health": health, "events": events, "doc": doc, "logbook": logbook, "config_raw": config_raw })
 }
 
 /// One project's effective `.dex.toml` config (read-only), or null if none resolves.
 #[tauri::command]
 fn project_config(project: String) -> Option<serde_json::Value> {
     specdex_core::project_config(&project).ok().flatten().map(|c| serde_json::json!(c))
-}
-
-/// Raw text of a project's `.dex.toml`, or null if none resolves.
-#[tauri::command]
-fn project_config_raw(project: String) -> Option<String> {
-    specdex_core::project_config_raw(&project).ok().flatten()
 }
 
 /// Open the spec's worktree in a terminal emulator via the configured provider.
@@ -75,7 +70,7 @@ fn emit_fleet(handle: &AppHandle) {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![fleet, spec_detail, project_config, project_config_raw, attach_terminal])
+        .invoke_handler(tauri::generate_handler![fleet, spec_detail, project_config, attach_terminal])
         .setup(|app| {
             let handle = app.handle().clone();
             // Watch the registry off-thread; push a fresh snapshot to the webview on change.

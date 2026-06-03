@@ -54,12 +54,12 @@ Cargo workspace (`Cargo.toml`, resolver 2), three members:
 
 ### `apps/desktop`
 - `src/main.rs` — Tauri entrypoint. Exposes the commands the webview invokes:
-  `fleet()`, `spec_detail(project,name)`, `project_config(project)` (merged `Effective`),
-  `project_config_raw(project)` (the verbatim `.dex.toml` text, for the sidebar), and
-  `attach_terminal(project,name)` (opens the configured terminal — default ghostty —
-  attached to the spec's multiplexer session, via `std::process::Command`). A background
-  thread watches `~/.spec` (the `notify` crate) and pushes a fresh `fleet` snapshot to the
-  webview on change.
+  `fleet()`, `spec_detail(project,name)` (state + events + `spec.md`/`logbook.md` + the
+  project's raw `.dex.toml` as `config_raw`), `project_config(project)` (merged `Effective`,
+  for the sidebar summary), and `attach_terminal(project,name)` (opens the configured
+  terminal — default ghostty — attached to the spec's multiplexer session, via
+  `std::process::Command`). A background thread watches `~/.spec` (the `notify` crate) and
+  pushes a fresh `fleet` snapshot to the webview on change.
 - `ui/` — the frontend, **served as-is, no build step** (`tauri.conf.json`
   `frontendDist: "ui"`):
   - `index.html` — shell (topbar, sidebar, fleet/detail panes).
