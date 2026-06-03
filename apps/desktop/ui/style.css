@@ -1,47 +1,57 @@
-/* specdex — zen / minimal / modern. Derived from drams.framer.website.
+/* specdex — built from drams.framer.website (Dieter-Rams "less, but better").
+   Component language, not just palette: hairline 1px rules instead of boxes,
+   near-zero shadow (whitespace + rules separate), warm-paper light identity,
+   sentence-case with tight negative tracking, blue links + ember hover-ring.
    Single-window desktop tool. Vanilla CSS, no framework, no CDN. */
 
 /* ============================ tokens ============================ */
 
 :root {
-  /* surfaces */
-  --paper:      #f4f3f0;
-  --surface:    #fbfaf8;
-  --surface-2:  #ffffff;
-  --rule:       #e4e2dc;
-  --rule-soft:  #eeece7;
+  /* surfaces — drams warm paper: #f7f7f7 ground, white raised, #f4f4f4 sunk */
+  --paper:      #f4f4f2;
+  --surface:    #ffffff;
+  --surface-2:  #faf9f7;
+  --sunk:       #f4f3f0;
+  /* rules — drams' hairlines are #cfcfcf (strong) over a softer line */
+  --rule:       #d9d6cf;
+  --rule-soft:  #ece9e2;
 
-  /* ink */
-  --ink:        #232220;
+  /* ink — drams near-black rgb(38,38,38), warmed a hair; muted #6e6e6e */
+  --ink:        #262420;
   --ink-muted:  #6e6a62;
-  --ink-faint:  #a8a399;
+  --ink-faint:  #a29d92;
 
-  /* single interactive accent (Drams blue) */
-  --accent:     #0a84ff;
+  /* accents straight from drams: blue rgb(0,153,255), ember rgb(232,92,24) */
+  --accent:     #0a86e8;        /* interactive — links, current rail node */
   --accent-fg:  #ffffff;
-  --accent-soft:#dcebfd;
+  --accent-soft:#dbeefd;
+  --ember:      #e85c18;        /* drams orange — the hover-ring + needs-you */
+  --ember-soft: #fbe6d9;
 
-  /* health hues */
-  --alive: #3f9d6b;  --alive-soft: #e4f1ea;
-  --idle:  #8b8780;  --idle-soft:  #ecebe7;
-  --stale: #b08a3e;  --stale-soft: #f4ecd9;
-  --needs: #e8601a;  --needs-soft: #fbe7da;
-  --done:  #5a86c4;  --done-soft:  #e6edf7;
+  /* health hues — calm, desaturated; dot color + faint wash */
+  --alive: #3f9d6b;  --alive-soft: #e6f1ea;
+  --idle:  #8b8780;  --idle-soft:  #edebe6;
+  --stale: #b08a3e;  --stale-soft: #f5edda;
+  --needs: var(--ember);  --needs-soft: var(--ember-soft);
+  --done:  #5a86c4;  --done-soft:  #e7eef8;
 
-  --shadow:      0 1px 2px rgba(40,38,34,.04), 0 2px 8px rgba(40,38,34,.04);
-  --shadow-lift: 0 2px 6px rgba(40,38,34,.06), 0 8px 24px rgba(40,38,34,.07);
+  /* drams is near-flat: box-shadow:none is the norm. Depth = hairline ring. */
+  --shadow: none;
+  /* the signature: a 1px inset hairline ring; ember on hover */
+  --ring:       inset 0 0 0 1px var(--rule);
+  --ring-hover: inset 0 0 0 1px var(--ember);
 
-  /* type */
+  /* type — drams Inter, weights 400/450/500, 16px body rhythm */
   --font-sans: "Inter", "Inter Variable", -apple-system, BlinkMacSystemFont,
                "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  /* spacing (4px grid) */
+  /* spacing — drams 16/32 rhythm */
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
   --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
 
-  /* radius */
-  --r-card: 10px; --r-pill: 999px; --r-chip: 6px;
+  /* radius — drams is near-square: 0/4px, circles for dots */
+  --r-card: 4px; --r-pill: 999px; --r-chip: 4px;
 
   /* motion */
   --ease: cubic-bezier(.4,.0,.2,1);
@@ -49,29 +59,35 @@
   --dur-fast: 140ms; --dur: 240ms; --dur-slow: 420ms;
 }
 
+/* Dark — warm-tinted, NOT flat near-black. Keeps the blue + ember accents so
+   it reads as the same drams system at night. */
 :root[data-theme="dark"] {
-  --paper:      #16150f;
-  --surface:    #1e1c16;
-  --surface-2:  #262319;
-  --rule:       #2e2b22;
-  --rule-soft:  #262319;
+  --paper:      #181610;
+  --surface:    #211e17;
+  --surface-2:  #1b1812;
+  --sunk:       #14120d;
+  --rule:       #36322a;
+  --rule-soft:  #2a261f;
 
-  --ink:        #ece8dd;
-  --ink-muted:  #9c968a;
-  --ink-faint:  #6b665b;
+  --ink:        #ece7da;
+  --ink-muted:  #a39c8c;
+  --ink-faint:  #6f695c;
 
-  --accent:     #5aa6ff;
+  --accent:     #4fa8ff;
   --accent-fg:  #11151c;
-  --accent-soft:#1e3552;
+  --accent-soft:#1c3a59;
+  --ember:      #ff6a2c;
+  --ember-soft: #34200f;
 
-  --alive: #5fc08a;  --alive-soft: #18271e;
-  --idle:  #9a958a;  --idle-soft:  #242219;
-  --stale: #d3a85a;  --stale-soft: #2c2516;
-  --needs: #ff7a3d;  --needs-soft: #2e1c12;
-  --done:  #7ba6e0;  --done-soft:  #1a2230;
+  --alive: #5fc08a;  --alive-soft: #1a2a20;
+  --idle:  #9a958a;  --idle-soft:  #26231b;
+  --stale: #d3a85a;  --stale-soft: #2f2818;
+  --needs: var(--ember);  --needs-soft: var(--ember-soft);
+  --done:  #7ba6e0;  --done-soft:  #1c2533;
 
-  --shadow:      0 1px 2px rgba(0,0,0,.30), 0 2px 8px rgba(0,0,0,.28);
-  --shadow-lift: 0 2px 6px rgba(0,0,0,.34), 0 10px 28px rgba(0,0,0,.40);
+  --shadow: none;
+  --ring:       inset 0 0 0 1px var(--rule);
+  --ring-hover: inset 0 0 0 1px var(--ember);
 }
 
 /* ============================ base ============================ */
@@ -85,16 +101,18 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.006em;          /* drams body sits at ~0; a hair tight */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
-h1 { margin: 0; }
+h1, h2 { margin: 0; }
 
 /* ============================ topbar ============================ */
+/* drams: a hairline-ruled band, flat, generous 32px horizontal padding. */
 
 .topbar {
   display: flex;
@@ -102,67 +120,70 @@ h1 { margin: 0; }
   justify-content: space-between;
   padding: var(--s-4) var(--s-6);
   border-bottom: 1px solid var(--rule);
-  background: color-mix(in srgb, var(--paper) 70%, transparent);
-  backdrop-filter: saturate(1.1) blur(8px);
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  backdrop-filter: saturate(1.05) blur(10px);
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
 .brand {
-  display: flex; align-items: baseline; gap: var(--s-2);
+  display: flex; align-items: center; gap: var(--s-2);
   text-decoration: none; color: inherit;
-  border-radius: var(--r-chip);
 }
 .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
-.brand-mark {
-  width: 9px; height: 9px;
+.brand-mark {                         /* drams uses circles for marks */
+  width: 8px; height: 8px;
   border-radius: var(--r-pill);
-  background: var(--accent);
-  align-self: center;
+  background: var(--ember);
   margin-right: 2px;
 }
 
 .brand-name {
-  font-size: 22px;
-  font-weight: 560;
-  letter-spacing: -.02em;
+  font-size: 20px;
+  font-weight: 500;                   /* drams tops at 500, not bold */
+  letter-spacing: -0.03em;            /* tight negative tracking on display */
 }
 
-.brand-sub {
-  font-size: 10.5px;
-  font-weight: 540;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+.brand-sub {                          /* sentence-case, NOT spaced-out uppercase */
+  font-size: 13px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
   color: var(--ink-faint);
 }
 
-.topbar-right { display: flex; align-items: center; gap: var(--s-4); }
+/* count + divider + toggle as one intentional cluster, hairline-separated */
+.topbar-right { display: flex; align-items: center; gap: var(--s-3); }
 
 .fleet-count {
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 450;
   font-variant-numeric: tabular-nums;
   color: var(--ink-muted);
+  letter-spacing: -0.01em;
+}
+
+.topbar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--rule);
 }
 
 .theme-toggle {
   width: 32px; height: 32px;
   display: grid; place-items: center;
-  border: 1px solid var(--rule);
+  border: none;
   border-radius: var(--r-chip);
-  background: var(--surface);
+  background: transparent;
+  box-shadow: var(--ring);            /* hairline ring, drams-style */
   color: var(--ink-muted);
   cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease),
-              background var(--dur-fast) var(--ease);
+  transition: box-shadow var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
 }
-.theme-toggle:hover { color: var(--ink); border-color: var(--ink-faint); }
-.theme-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
+.theme-toggle:hover { color: var(--ink); box-shadow: var(--ring-hover); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .theme-icon { width: 16px; height: 16px; display: block; }
 .theme-icon svg { width: 100%; height: 100%; stroke: currentColor; fill: none; }
 
@@ -170,41 +191,37 @@ h1 { margin: 0; }
 
 .fleet {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(296px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: var(--s-4);
   padding: var(--s-6);
-  max-width: 1320px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
 /* ============================ minion card ============================ */
+/* drams card = a flat surface held by a 1px hairline ring, NO drop shadow.
+   Health shows as a single 2px top edge + dot, not a colored box or wash. */
 
 .minion {
   --hue: var(--idle);
   --hue-soft: var(--idle-soft);
   position: relative;
-  background:
-    linear-gradient(to right,
-      color-mix(in srgb, var(--hue-soft) 55%, transparent),
-      var(--surface) 38%);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--hue);
-  border-radius: var(--r-card);
-  padding: var(--s-4) var(--s-4) var(--s-3);
-  box-shadow: var(--shadow);
+  background: var(--surface);
+  border: none;
+  border-top: 2px solid var(--hue);   /* the one health stripe, drams-thin */
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  box-shadow: var(--ring);            /* hairline ring does the boxing */
+  padding: var(--s-4) var(--s-4) var(--s-4);
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
+  gap: var(--s-4);
   transition: box-shadow var(--dur) var(--ease),
-              border-color var(--dur) var(--ease),
-              background var(--dur) var(--ease),
               transform var(--dur) var(--ease-soft);
   animation: settle-in var(--dur-slow) var(--ease-soft) both;
   cursor: pointer;
 }
 .minion:hover {
-  box-shadow: var(--shadow-lift);
-  transform: translateY(-1px);
+  box-shadow: var(--ring-hover);      /* drams: hover swaps the ring to ember */
 }
 .minion:focus-visible {
   outline: 2px solid var(--accent);
@@ -233,7 +250,7 @@ h1 { margin: 0; }
 }
 
 .life-dot {
-  width: 9px; height: 9px;
+  width: 8px; height: 8px;
   border-radius: var(--r-pill);
   background: var(--hue);
   position: relative;
@@ -241,22 +258,23 @@ h1 { margin: 0; }
 }
 
 .m-name {
-  font-size: 14px;
-  font-weight: 520;
-  letter-spacing: -.01em;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* drams link language: blue text, thin blue underline (a border, not decoration) */
 .m-pr {
   font-family: var(--font-mono);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--accent);
   text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   padding-bottom: 1px;
   transition: border-color var(--dur-fast) var(--ease);
 }
@@ -270,34 +288,26 @@ h1 { margin: 0; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 /* ---- phase rail ---- */
 
 .m-phase { display: flex; flex-direction: column; gap: var(--s-2); }
 
-.rail {
-  display: flex;
-  align-items: center;
-  gap: 0;
-}
+.rail { display: flex; align-items: center; gap: 0; }
 .rail-node {
-  width: 8px; height: 8px;
+  width: 7px; height: 7px;
   border-radius: var(--r-pill);
   flex: none;
   background: transparent;
   border: 1.5px solid var(--rule);
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.rail-node.done {
-  background: var(--ink-faint);
-  border-color: var(--ink-faint);
-}
+.rail-node.done { background: var(--ink-faint); border-color: var(--ink-faint); }
 .rail-node.current {
-  background: transparent;
-  border-color: var(--hue);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hue) 22%, transparent);
+  background: var(--accent);          /* drams blue marks "here" */
+  border-color: var(--accent);
 }
 .rail-link {
   height: 1px;
@@ -307,12 +317,13 @@ h1 { margin: 0; }
 }
 .rail-link.done { background: var(--ink-faint); }
 
+/* sentence-case phase label, tight tracking — NOT a spaced uppercase eyebrow */
 .phase-label {
-  font-size: 10.5px;
-  font-weight: 540;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
   color: var(--ink-muted);
+  text-transform: capitalize;
 }
 
 /* ---- footer: agents + review meta ---- */
@@ -325,13 +336,15 @@ h1 { margin: 0; }
   flex-wrap: wrap;
 }
 
-.agents { display: flex; align-items: center; gap: var(--s-2); }
+.agents { display: flex; align-items: center; gap: var(--s-3); }
 
 .agent {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
   color: var(--ink-muted);
 }
 .agent-pip {
@@ -342,16 +355,15 @@ h1 { margin: 0; }
   flex: none;
 }
 .agent.active { color: var(--ink); }
-.agent.active .agent-pip {
-  background: var(--hue);
-  border-color: var(--hue);
-}
+.agent.active .agent-pip { background: var(--hue); border-color: var(--hue); }
 
 .review-meta {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   color: var(--ink-muted);
 }
@@ -364,29 +376,25 @@ h1 { margin: 0; }
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
-  color: var(--needs);
-  margin-top: 1px;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  color: var(--ember);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--rule-soft);   /* hairline divides, not a box */
 }
 .m-blocked svg { width: 13px; height: 13px; stroke: currentColor; fill: none; flex: none; }
 
 /* ============================ life-dot motion ============================ */
 /* Motion = REAL recency, not the health label. A card carries `.live` only when
-   it changed within the recency window (see app.js). Color always = health;
-   motion only when actually live. Static data sits calm. */
+   it changed within the recency window (see app.js). Color always = health. */
 
-/* live — the dot breathes (any health). This is the only "work is happening" cue. */
 .live .life-dot { animation: breathe 2.6s var(--ease-soft) infinite; }
 .live .agent.active .agent-pip { animation: breathe 2.6s var(--ease-soft) infinite; }
-
-/* live + needs-you — the breathe becomes a gentle warm attention pulse instead. */
 .live[data-health="needs-you"] .life-dot { animation: attention 3.4s var(--ease-soft) infinite; }
 
-/* idle — at rest, slightly dimmed (whether live or not) */
 .minion[data-health="idle"] .life-dot,
 .detail[data-health="idle"] .life-dot { opacity: .7; }
 
-/* stale — steady + faint dashed ring (a missed heartbeat). Never live. */
 .minion[data-health="stale"] .life-dot::after,
 .detail[data-health="stale"] .life-dot::after {
   content: "";
@@ -396,15 +404,13 @@ h1 { margin: 0; }
   border: 1px dashed color-mix(in srgb, var(--stale) 55%, transparent);
 }
 
-/* done — solid, fully at rest (no motion, never live) */
-
 @keyframes breathe {
   0%, 100% { opacity: 1;   transform: scale(1); }
   50%      { opacity: .55; transform: scale(.82); }
 }
 @keyframes attention {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--needs) 0%, transparent); opacity: 1; }
-  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--needs) 22%, transparent); opacity: .9; }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ember) 0%, transparent); opacity: 1; }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--ember) 24%, transparent); opacity: .9; }
 }
 
 /* ============================ spec-detail screen ============================ */
@@ -412,23 +418,24 @@ h1 { margin: 0; }
 .detail {
   --hue: var(--idle);
   --hue-soft: var(--idle-soft);
-  max-width: 860px;
+  max-width: 820px;
   margin: 0 auto;
-  padding: var(--s-6);
+  padding: var(--s-6) var(--s-6) var(--s-8);
   display: flex;
   flex-direction: column;
   gap: var(--s-6);
   animation: settle-in var(--dur-slow) var(--ease-soft) both;
 }
 
-/* ---- back affordance ---- */
+/* ---- back affordance — quiet text button, blue on hover (drams link) ---- */
 
 .d-back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   align-self: flex-start;
-  font-size: 12.5px;
+  font-size: 13px;
+  letter-spacing: -0.01em;
   color: var(--ink-muted);
   background: none;
   border: none;
@@ -436,13 +443,13 @@ h1 { margin: 0; }
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease);
 }
-.d-back:hover { color: var(--ink); }
-.d-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.d-back:hover { color: var(--accent); }
+.d-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
 .d-back svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
 
 /* ---- detail header ---- */
 
-.d-head { display: flex; flex-direction: column; gap: var(--s-4); }
+.d-head { display: flex; flex-direction: column; gap: var(--s-5); }
 
 .d-title-row {
   display: flex;
@@ -453,89 +460,100 @@ h1 { margin: 0; }
 .d-title {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  font-size: 20px;
-  letter-spacing: -.01em;
+  gap: 7px;
+  font-size: 26px;                    /* drams display step */
+  letter-spacing: -0.03em;
 }
-.d-title .d-project { color: var(--ink-muted); font-weight: 440; }
+.d-title .d-project { color: var(--ink-muted); font-weight: 400; }
 .d-title .d-slash { color: var(--ink-faint); font-weight: 400; }
-.d-title .d-name { color: var(--ink); font-weight: 540; }
+.d-title .d-name { color: var(--ink); font-weight: 500; }
 
+/* health tag — sentence case, hairline ring, near-square (not a loud pill) */
 .d-health {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  font-weight: 540;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
   color: var(--hue);
-  background: color-mix(in srgb, var(--hue-soft) 70%, transparent);
-  border: 1px solid color-mix(in srgb, var(--hue) 22%, transparent);
-  padding: 3px 9px;
-  border-radius: var(--r-pill);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 30%, transparent);
+  padding: 4px 10px;
+  border-radius: var(--r-chip);
 }
-.d-health .life-dot { width: 8px; height: 8px; }
+.d-health .life-dot { width: 7px; height: 7px; }
 
+/* attach — drams secondary button: hairline ring, ember ring on hover */
 .d-attach {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 7px;
+  font-size: 13px;
   font-family: var(--font-mono);
   color: var(--ink-muted);
-  background: var(--surface);
-  border: 1px solid var(--rule);
+  background: transparent;
+  border: none;
+  box-shadow: var(--ring);
   border-radius: var(--r-chip);
-  padding: 5px 10px;
+  padding: 7px 12px;
   cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  transition: box-shadow var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.d-attach:hover { color: var(--ink); border-color: var(--ink-faint); }
+.d-attach:hover { color: var(--ink); box-shadow: var(--ring-hover); }
 .d-attach:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .d-attach svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
 
 /* big phase rail in the header */
 .d-phase { display: flex; flex-direction: column; gap: var(--s-2); }
 .d-phase .rail { gap: 0; }
-.d-phase .rail-node { width: 10px; height: 10px; }
-.d-phase .phase-label { font-size: 11px; }
+.d-phase .rail-node { width: 9px; height: 9px; }
+.d-phase .phase-label { font-size: 13px; }
 
-/* ---- state panel: quiet key/value rhythm ---- */
+/* ---- state panel — drams: no boxed card, just hairline-ruled rows ---- */
 
 .d-state {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--s-3) var(--s-5);
-  padding: var(--s-5);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--hue);
-  border-radius: var(--r-card);
+  gap: 0 var(--s-6);
+  padding: var(--s-2) 0 0;
+  border-top: 1px solid var(--rule);  /* the panel is bounded by rules, not a box */
+  border-bottom: 1px solid var(--rule);
 }
-.kv { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kv {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--rule-soft);   /* quiet inter-row hairlines */
+}
+/* sentence-case keys, muted — not spaced-out uppercase eyebrows */
 .kv-key {
-  font-size: 10.5px;
-  font-weight: 540;
-  letter-spacing: .07em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
   color: var(--ink-faint);
 }
 .kv-val {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.kv-val.mono { font-family: var(--font-mono); font-size: 12px; }
-.kv-val a { color: var(--accent); text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.kv-val.mono { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0; }
+.kv-val a {
+  color: var(--accent); text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
 .kv-val a:hover { border-bottom-color: var(--accent); }
 .kv-val .pass { color: var(--alive); }
-.kv-val .fail { color: var(--needs); }
-.kv-val.blocked { color: var(--needs); grid-column: 1 / -1; }
+.kv-val .fail { color: var(--ember); }
+.kv-val.blocked { color: var(--ember); }
 .kv-val .star { color: var(--stale); margin-right: 2px; }
 .kv.span-all { grid-column: 1 / -1; }
 
@@ -549,22 +567,22 @@ h1 { margin: 0; }
   gap: var(--s-3);
 }
 .tl-head h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 540;
-  letter-spacing: -.01em;
+  font-size: 16px;                    /* drams body-large */
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
-.tl-toggle {
-  font-size: 12px;
+.tl-toggle {                          /* quiet text link, blue on hover */
+  font-size: 13px;
+  letter-spacing: -0.01em;
   color: var(--ink-muted);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px 0;
   transition: color var(--dur-fast) var(--ease);
 }
-.tl-toggle:hover { color: var(--ink); }
-.tl-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.tl-toggle:hover { color: var(--accent); }
+.tl-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
 .tl { display: flex; flex-direction: column; }
 
@@ -574,29 +592,26 @@ h1 { margin: 0; }
   grid-template-columns: 22px 1fr auto;
   column-gap: var(--s-3);
   align-items: start;
-  padding: 7px 0;
+  padding: var(--s-2) 0;
   position: relative;
 }
-/* the vertical spine, drawn through the glyph column */
 .tl-row::before {
   content: "";
   position: absolute;
-  left: 10px;
-  top: 0;
-  bottom: 0;
+  left: 10px; top: 0; bottom: 0;
   width: 1px;
   background: var(--rule);
 }
-.tl-row:first-child::before { top: 14px; }
-.tl-row:last-child::before  { bottom: calc(100% - 14px); }
+.tl-row:first-child::before { top: 15px; }
+.tl-row:last-child::before  { bottom: calc(100% - 15px); }
 
+/* drams: hairline-ring circle, flat surface, no shadow */
 .tl-glyph {
   width: 21px; height: 21px;
-  display: grid;
-  place-items: center;
+  display: grid; place-items: center;
   border-radius: var(--r-pill);
-  background: var(--surface);
-  border: 1px solid var(--rule);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--rule);
   color: var(--ink-muted);
   z-index: 1;
   margin-top: -1px;
@@ -604,54 +619,53 @@ h1 { margin: 0; }
 .tl-glyph svg { width: 12px; height: 12px; stroke: currentColor; fill: none; }
 
 .tl-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.tl-summary { font-size: 13px; color: var(--ink); line-height: 1.4; }
-.tl-summary .em { font-weight: 520; }
+.tl-summary {
+  font-size: 14px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.45;
+}
+.tl-summary .em { font-weight: 500; }
 .tl-sub {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-faint);
   font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .tl-time {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   padding-top: 3px;
 }
 
-/* milestones — phase changes carry the hue, a touch more weight */
+/* milestones — phase changes carry the hue ring, a touch more weight */
 .tl-row.milestone .tl-glyph {
   color: var(--hue);
-  border-color: color-mix(in srgb, var(--hue) 35%, transparent);
-  background: color-mix(in srgb, var(--hue-soft) 60%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 45%, transparent);
 }
 .tl-row.milestone .tl-summary { color: var(--ink); }
 
-/* attention — blocked / note draw a little more (warm, never loud) */
+/* attention — blocked / note draw a little more (ember ring, never loud) */
 .tl-row.attn .tl-glyph {
-  color: var(--needs);
-  border-color: color-mix(in srgb, var(--needs) 40%, transparent);
-  background: color-mix(in srgb, var(--needs-soft) 70%, transparent);
+  color: var(--ember);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ember) 50%, transparent);
 }
-.tl-row.attn .tl-summary { color: var(--needs); }
+.tl-row.attn .tl-summary { color: var(--ember); }
 
 /* muted — heartbeats recede; the story stays readable */
-.tl-row.muted { padding: 3px 0; opacity: .55; }
-.tl-row.muted .tl-glyph {
-  width: 21px; height: 21px;
-  border-style: dashed;
-  color: var(--ink-faint);
-}
-.tl-row.muted .tl-summary { font-size: 12px; color: var(--ink-faint); }
+.tl-row.muted { padding: 5px 0; opacity: .5; }
+.tl-row.muted .tl-glyph { box-shadow: inset 0 0 0 1px var(--rule-soft); color: var(--ink-faint); }
+.tl-row.muted .tl-summary { font-size: 13px; color: var(--ink-faint); }
 
 /* collapsed-heartbeats summary chip */
-.tl-row.hb-collapsed .tl-glyph { border-style: dashed; color: var(--ink-faint); }
-.tl-row.hb-collapsed .tl-summary {
-  font-size: 12px; color: var(--ink-muted); cursor: pointer;
-}
-.tl-row.hb-collapsed .tl-summary:hover { color: var(--ink); }
+.tl-row.hb-collapsed .tl-glyph { box-shadow: inset 0 0 0 1px var(--rule-soft); color: var(--ink-faint); }
+.tl-row.hb-collapsed .tl-summary { font-size: 13px; color: var(--ink-muted); cursor: pointer; }
+.tl-row.hb-collapsed .tl-summary:hover { color: var(--accent); }
 
 /* ============================ reduced motion ============================ */
 

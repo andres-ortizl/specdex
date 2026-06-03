@@ -681,6 +681,8 @@ function routeFromHash() {
 
 // ============================ theme ============================
 
+const THEME_ICON = { system: "system", light: "sun", dark: "moon" };
+
 function applyTheme(state) {
   const resolved =
     state === "system"
@@ -689,12 +691,13 @@ function applyTheme(state) {
   document.documentElement.dataset.theme = resolved;
   const btn = document.getElementById("theme-toggle");
   const icon = document.getElementById("theme-icon");
-  icon.innerHTML = ICONS[state === "system" ? "system" : resolved];
+  icon.innerHTML = ICONS[THEME_ICON[state === "system" ? "system" : resolved]];
   btn.title = "Theme: " + state;
 }
 
 function initTheme() {
-  let state = localStorage.dexTheme || "system";
+  // drams' identity lives in warm-paper light — default there, not system.
+  let state = localStorage.dexTheme || "light";
   applyTheme(state);
   document.getElementById("theme-toggle").addEventListener("click", () => {
     state = state === "system" ? "light" : state === "light" ? "dark" : "system";

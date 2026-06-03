@@ -112,7 +112,11 @@ enum Cmd {
         op: ConfigOp,
     },
     /// Install specdex agents, skill, and config scaffold into ~/.claude and ~/.config/dex
-    Install,
+    Install {
+        /// Overwrite the skill even if ~/.claude/skills/spec already exists (re-sync)
+        #[arg(long)]
+        update: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -151,7 +155,7 @@ fn main() -> Result<()> {
         Cmd::Ls => return ls(),
         Cmd::Watch => return watch(),
         Cmd::Config { ref op } => return config_cmd(op),
-        Cmd::Install => return install(),
+        Cmd::Install { ref update } => return install(*update),
         _ => {}
     }
     let spec = cli
@@ -226,7 +230,7 @@ fn config_cmd(op: &ConfigOp) -> Result<()> {
     Ok(())
 }
 
-fn install() -> Result<()> {
+fn install(update: bool) -> Result<()> {
     let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
 
     let agents_dir = home.join(".claude").join("agents");
@@ -243,10 +247,10 @@ fn install() -> Result<()> {
     }
 
     let skill_dest = home.join(".claude").join("skills").join("spec");
-    if skill_dest.exists() {
+    if skill_dest.exists() && !update {
         println!(
             "warning: ~/.claude/skills/spec already exists (e.g. a dotfiles symlink) — \
-remove it to let specdex manage the skill, then re-run `dex install`"
+re-run `dex install --update` to overwrite it, or remove it to let specdex manage the skill"
         );
     } else {
         std::fs::create_dir_all(&skill_dest)?;
@@ -321,7 +325,7 @@ fn build_payload(cmd: Cmd) -> Result<Payload> {
         Cmd::Note { level, topic, text } => {
             Payload::Note { level: parse_level(&level)?, topic, text }
         }
-        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } | Cmd::Install => {
+        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } | Cmd::Install { .. } => {
             unreachable!("handled before payload build")
         }
     })
