@@ -120,6 +120,7 @@ function sampleDetail(project, name) {
           data: { reason: "infra flake on CI — needs a human re-run" } },
       ],
       doc: "# verify-flake\n\nStabilize the flaky results-serializer test under CI load.\n\n## Acceptance Criteria\n- [ ] test passes 50× in a row locally\n- [ ] no N+1 query in the results serializer\n",
+      logbook: "# verify-flake — logbook\n\nStatus: BLOCKED\n\n- 95m ago — spec created, worktree + ports assigned\n- 80m ago — build started (coder c-7a1)\n- 60m ago — tests green (320 passed)\n- 45m ago — review round 1: changes requested (1 blocker, 3 issues)\n- 30m ago — addressing review feedback\n- 20m ago — review round 2: approved\n- 18m ago — PR #4012 created\n- 14m ago — CI gate failed (infra flake)\n- 12m ago — BLOCKED: needs a human CI re-run\n",
     };
   }
   // Generic calm sample for any other card.
@@ -153,6 +154,7 @@ function sampleDetail(project, name) {
     doc: row.mode === "collaborative"
       ? "# " + name + "\n\nHuman-driven session — planning live with the lead.\n"
       : null,
+    logbook: "# " + name + " — logbook\n\nStatus: " + row.phase.toUpperCase() + "\n\n- 60m ago — spec created\n- 40m ago — entered " + row.phase + "\n- 10m ago — working through the " + row.phase + " step\n",
   };
 }
 
@@ -244,6 +246,16 @@ function relTime(iso) {
   if (h < 24) return h + "h ago";
   const d = Math.round(h / 24);
   return d + "d ago";
+}
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// Exact UTC stamp for timeline rows — relative "ago" lives once in the header.
+function fmtUTC(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
 function renderRail(currentPhase) {
@@ -671,9 +683,18 @@ function renderTimeline(events) {
   const wrap = el("div", "d-timeline");
 
   const head = el("div", "tl-head");
-  const h2 = el("h2");
-  h2.textContent = "Timeline";
-  head.appendChild(h2);
+  const newest = [...events].sort((a, b) => Date.parse(b.time) - Date.parse(a.time))[0];
+  const hdLeft = el("div", "tl-head-left");
+  const updated = el("span", "tl-updated");
+  if (newest) {
+    updated.textContent = "updated " + relTime(newest.time);
+    updated.title = fmtUTC(newest.time) + " UTC";
+  }
+  hdLeft.appendChild(updated);
+  const utcNote = el("span", "tl-utc-note");
+  utcNote.textContent = "times in UTC";
+  hdLeft.appendChild(utcNote);
+  head.appendChild(hdLeft);
 
   const hbCount = events.filter((e) => e.type === "heartbeat").length;
   const toggle = el("button", "tl-toggle");
@@ -717,7 +738,7 @@ function renderTimeline(events) {
       body.appendChild(sum);
       row.appendChild(body);
       const time = el("span", "tl-time");
-      time.textContent = relTime(first.time);
+      time.textContent = fmtUTC(first.time);
       time.title = last.time + " – " + first.time;
       row.appendChild(time);
       tl.appendChild(row);
@@ -754,7 +775,7 @@ function eventRow(ev) {
   row.appendChild(body);
 
   const time = el("span", "tl-time");
-  time.textContent = relTime(ev.time);
+  time.textContent = fmtUTC(ev.time);
   time.title = ev.time + (ev.source ? "  ·  " + ev.source : "");
   row.appendChild(time);
 
@@ -817,28 +838,51 @@ function renderDetail(detail) {
 
   root.appendChild(head);
   root.appendChild(renderState(s));
-  root.appendChild(renderSpecDoc(detail.doc));
-  root.appendChild(renderTimeline(detail.events || []));
+  root.appendChild(renderDetailPanel(detail));
 }
 
-// The spec.md design doc — read-only, plain monospace (no markdown lib).
-function renderSpecDoc(doc) {
-  const wrap = el("div", "d-spec");
-  const head = el("div", "tl-head");
-  const h2 = el("h2");
-  h2.textContent = "Spec";
-  head.appendChild(h2);
-  wrap.appendChild(head);
+let DETAIL_TAB = "events";
 
+// One panel, three sources: the event log, spec.md, logbook.md — switched by a
+// row of drams push-buttons.
+function renderDetailPanel(detail) {
+  const wrap = el("div", "d-panel");
+
+  const tabs = el("div", "d-tabs");
+  [
+    ["events", "events.json"],
+    ["spec", "spec.md"],
+    ["logbook", "logbook.md"],
+  ].forEach(([key, lbl]) => {
+    const b = el("button", "d-tab" + (DETAIL_TAB === key ? " active" : ""));
+    b.type = "button";
+    b.textContent = lbl;
+    b.setAttribute("aria-selected", DETAIL_TAB === key ? "true" : "false");
+    b.addEventListener("click", () => {
+      DETAIL_TAB = key;
+      renderDetail(CURRENT_DETAIL);
+    });
+    tabs.appendChild(b);
+  });
+  wrap.appendChild(tabs);
+
+  if (DETAIL_TAB === "events") wrap.appendChild(renderTimeline(detail.events || []));
+  else if (DETAIL_TAB === "spec") wrap.appendChild(renderDoc(detail.doc, "No spec.md for this spec."));
+  else wrap.appendChild(renderDoc(detail.logbook, "No logbook.md for this spec."));
+
+  return wrap;
+}
+
+// A read-only markdown file — plain monospace, no markdown lib.
+function renderDoc(doc, emptyMsg) {
   const body = el("pre", "spec-doc");
   if (doc && doc.trim()) {
     body.textContent = doc;
   } else {
     body.classList.add("empty");
-    body.textContent = "No spec.md for this spec.";
+    body.textContent = emptyMsg;
   }
-  wrap.appendChild(body);
-  return wrap;
+  return body;
 }
 
 // ============================ routing ============================
@@ -861,6 +905,7 @@ async function loadDetail(project, name) {
 async function navigate(route) {
   if (route.view === "detail") {
     HEARTBEATS_EXPANDED = false;
+    DETAIL_TAB = "events";
     SB_EXPANDED.add(route.project); // surface the open spec's project config
     const detail = await loadDetail(route.project, route.name);
     renderDetail(detail);

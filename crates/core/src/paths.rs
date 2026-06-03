@@ -25,6 +25,10 @@ pub fn spec_doc_path(project: &str, name: &str) -> Result<PathBuf> {
     Ok(spec_dir(project, name)?.join("spec.md"))
 }
 
+pub fn logbook_path(project: &str, name: &str) -> Result<PathBuf> {
+    Ok(spec_dir(project, name)?.join("logbook.md"))
+}
+
 pub fn source_str(project: &str, name: &str) -> String {
     format!("/spec/{project}/{name}")
 }

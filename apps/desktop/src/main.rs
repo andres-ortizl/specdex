@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use notify::{RecursiveMode, Watcher};
 use specdex_core::{
-    fleet_snapshot, load_all, load_spec_doc, load_state, paths, read_events, FleetRow,
+    fleet_snapshot, load_all, load_logbook, load_spec_doc, load_state, paths, read_events,
+    FleetRow,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -25,14 +26,15 @@ fn fleet() -> Vec<FleetRow> {
 }
 
 /// Full detail for one spec: snapshot state, derived health, the event log, and
-/// the spec.md design doc (if present).
+/// the `spec.md` / `logbook.md` docs (if present).
 #[tauri::command]
 fn spec_detail(project: String, name: String) -> serde_json::Value {
     let state = load_state(&project, &name).ok().flatten();
     let health = state.as_ref().map(|s| s.health(chrono::Utc::now(), STALE_SECS).label().to_string());
     let events = read_events(&project, &name).unwrap_or_default();
     let doc = load_spec_doc(&project, &name).ok().flatten();
-    serde_json::json!({ "state": state, "health": health, "events": events, "doc": doc })
+    let logbook = load_logbook(&project, &name).ok().flatten();
+    serde_json::json!({ "state": state, "health": health, "events": events, "doc": doc, "logbook": logbook })
 }
 
 /// One project's effective `.dex.toml` config (read-only), or null if none resolves.

@@ -82,6 +82,12 @@ pub fn load_spec_doc(project: &str, name: &str) -> Result<Option<String>> {
     Ok(fs::read_to_string(&p).ok())
 }
 
+/// Read the spec's logbook (`logbook.md`), if the file exists.
+pub fn load_logbook(project: &str, name: &str) -> Result<Option<String>> {
+    let p = paths::logbook_path(project, name)?;
+    Ok(fs::read_to_string(&p).ok())
+}
+
 /// Resolve a project's effective config by walking up from one of its specs'
 /// worktrees to the repo `.dex.toml`. `None` when the project has no spec with a
 /// resolvable config (e.g. every worktree predates a `.dex.toml`).
