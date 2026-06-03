@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>specdex — fleet</title>
+  <script>
+    // Resolve theme before first paint to avoid a flash.
+    (function () {
+      var s = localStorage.dexTheme || 'system';
+      var t = s === 'system'
+        ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : s;
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <h1 class="brand-name">specdex</h1>
+      <span class="brand-sub">fleet</span>
+    </div>
+
+    <div class="topbar-right">
+      <span class="fleet-count" id="fleet-count"></span>
+      <button class="theme-toggle" id="theme-toggle" type="button"
+              aria-label="Toggle color theme" title="Theme: system">
+        <span class="theme-icon" id="theme-icon" aria-hidden="true"></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="fleet" id="fleet" aria-label="Running specs"></main>
+
+  <script src="app.js"></script>
+</body>
+</html>
