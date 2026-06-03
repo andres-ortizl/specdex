@@ -73,6 +73,15 @@ pub struct Providers {
     pub pr_review: Option<String>,
 }
 
+/// A service this project runs locally and the env var its allocated port exports as.
+/// Generic — no anyformat/web assumptions; a CLI project simply declares none.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PortSpec {
+    pub service: String,
+    pub base: u16,
+    pub env: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Identity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -90,6 +99,8 @@ pub struct Effective {
     #[serde(default)]
     pub phases_skip: Vec<String>,
     #[serde(default)]
+    pub ports: Vec<PortSpec>,
+    #[serde(default)]
     pub identity: Identity,
 }
 
@@ -101,6 +112,8 @@ struct Layer {
     hooks: BTreeMap<HookPoint, Action>,
     #[serde(default)]
     phases: PhasesLayer,
+    #[serde(default)]
+    ports: Vec<PortSpec>,
     #[serde(default)]
     identity: Identity,
     vault: Option<String>,
@@ -129,6 +142,7 @@ fn merge(base: Effective, over: Layer) -> Effective {
         } else {
             base.phases_skip
         },
+        ports: if !over.ports.is_empty() { over.ports } else { base.ports },
         identity: Identity {
             env_file: over.identity.env_file.or(base.identity.env_file),
             github_org: over.identity.github_org.or(base.identity.github_org),
@@ -158,6 +172,12 @@ pub fn validate(eff: &Effective) -> Result<()> {
     for p in &eff.phases_skip {
         if !VALID_PHASES.contains(&p.as_str()) {
             return Err(anyhow!("invalid phases_skip entry: {p}"));
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for p in &eff.ports {
+        if !seen.insert(&p.service) {
+            return Err(anyhow!("duplicate port service: {}", p.service));
         }
     }
     Ok(())
@@ -234,6 +254,7 @@ pub fn get_dotted(eff: &Effective, key: &str) -> Result<String> {
             None => Ok(String::new()),
         },
         "phases_skip" => Ok(serde_json::to_string(&eff.phases_skip)?),
+        "ports" => Ok(serde_json::to_string(&eff.ports)?),
         "identity.env_file" => Ok(eff.identity.env_file.clone().unwrap_or_default()),
         "identity.github_org" => Ok(eff.identity.github_org.clone().unwrap_or_default()),
         _ => Err(anyhow!("unknown config key: {key}")),
@@ -264,6 +285,10 @@ pub fn schema() -> serde_json::Value {
             "value": "a skill ref string (e.g. \"/pr\") or { kind = \"skill\", ref = \"/pr\" }"
         },
         "phases_skip": { "valid": VALID_PHASES },
+        "ports": {
+            "shape": "array of { service, base, env } tables ([[ports]])",
+            "note": "service = logical name; base = base port; env = env var the allocated port exports as. A CLI project declares none."
+        },
         "identity": { "fields": ["env_file", "github_org"] },
         "authoring": {
             "format": "toml",

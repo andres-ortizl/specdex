@@ -13,6 +13,8 @@
 //! Phases are sequential and non-overlapping, so a `phase.enter` implicitly ends
 //! the previous phase. `block` is a flag layered on the current phase, not a phase.
 
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -136,27 +138,6 @@ pub fn validate_score(s: u8) -> Option<u8> {
     (s <= 5).then_some(s)
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Ports {
-    pub offset: u16,
-    pub frontend: u16,
-    pub backend: u16,
-    pub api: u16,
-    pub postgres: u16,
-}
-
-impl Ports {
-    pub fn from_offset(offset: u16) -> Self {
-        Ports {
-            offset,
-            frontend: 5173 + offset,
-            backend: 8080 + offset,
-            api: 8081 + offset,
-            postgres: 5432 + offset,
-        }
-    }
-}
-
 /// The on-disk wire event (one JSON object per line in `events.jsonl`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
@@ -174,7 +155,8 @@ pub struct Event {
 /// own `data`. This is what the CLI builds from args.
 #[derive(Debug, Clone)]
 pub enum Payload {
-    Init { branch: String, worktree: String, ports: Ports },
+    Init { branch: String, worktree: String },
+    PortsAssigned { offset: u16, ports: BTreeMap<String, u16> },
     PhaseEnter { phase: Phase, reason: Option<String> },
     Block { reason: String },
     Unblock,
@@ -192,6 +174,7 @@ impl Payload {
     pub fn kind(&self) -> &'static str {
         match self {
             Payload::Init { .. } => "spec.created",
+            Payload::PortsAssigned { .. } => "ports.assigned",
             Payload::PhaseEnter { .. } => "phase.enter",
             Payload::Block { .. } => "spec.blocked",
             Payload::Unblock => "spec.unblocked",
@@ -218,8 +201,11 @@ impl Payload {
 
     pub fn data(&self) -> Value {
         match self {
-            Payload::Init { branch, worktree, ports } => {
-                json!({ "branch": branch, "worktree": worktree, "ports": ports })
+            Payload::Init { branch, worktree } => {
+                json!({ "branch": branch, "worktree": worktree })
+            }
+            Payload::PortsAssigned { offset, ports } => {
+                json!({ "offset": offset, "ports": ports })
             }
             Payload::PhaseEnter { phase, reason } => {
                 let mut m = json!({ "phase": phase });

@@ -2,8 +2,8 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use specdex_core::{
-    emit, get_dotted, load_all, load_effective, schema, validate, validate_score, GateProvider,
-    GateResult, NoteLevel, Payload, Phase, Ports, Role, Verdict,
+    emit, get_dotted, load_all, load_effective, pick_offset, schema, validate, validate_score,
+    GateProvider, GateResult, NoteLevel, Payload, Phase, Role, Verdict,
 };
 
 /// Resource-verb CLI. The target spec is ambient: set `DEX_SPEC=<project>/<name>`
@@ -20,14 +20,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Register the worktree: branch, path, port offset (emits spec.created)
+    /// Register the worktree: branch + path (emits spec.created)
     Init {
         #[arg(long)]
         branch: String,
         #[arg(long)]
         worktree: String,
-        #[arg(long)]
-        offset: u16,
+    },
+    /// Port allocation
+    Ports {
+        #[command(subcommand)]
+        op: PortsOp,
     },
     /// Set the lifecycle phase (setup|plan|build|review|ship|verify|complete|accepted)
     Phase {
@@ -115,6 +118,12 @@ enum ConfigOp {
 }
 
 #[derive(Subcommand)]
+enum PortsOp {
+    /// Allocate a free, collision-aware port offset; records it and prints `export` lines
+    Alloc,
+}
+
+#[derive(Subcommand)]
 enum AgentOp {
     /// A teammate started working
     Spawn {
@@ -137,10 +146,49 @@ fn main() -> Result<()> {
         .spec
         .ok_or_else(|| anyhow!("no target spec — set DEX_SPEC=<project>/<name> or pass -s"))?;
     let (project, name) = split_spec(&spec)?;
+    if let Cmd::Ports { op } = cli.cmd {
+        return ports_cmd(&project, &name, op);
+    }
     let payload = build_payload(cli.cmd)?;
     let state = emit(&project, &name, payload)?;
     println!("{spec} → {}", state.phase.as_str());
     Ok(())
+}
+
+fn ports_cmd(project: &str, name: &str, op: PortsOp) -> Result<()> {
+    match op {
+        PortsOp::Alloc => {
+            let eff = load_effective(&std::env::current_dir()?)?;
+            if eff.ports.is_empty() {
+                eprintln!("# no [ports] configured for this project");
+                return Ok(());
+            }
+            let used = used_offsets(project, name)?;
+            let (offset, map) = pick_offset(&eff.ports, &used, 10, 990, port_is_free)
+                .ok_or_else(|| anyhow!("no free port offset found up to 990"))?;
+            emit(project, name, Payload::PortsAssigned { offset, ports: map.clone() })?;
+            for ps in &eff.ports {
+                if let Some(p) = map.get(&ps.service) {
+                    println!("export {}={}", ps.env, p);
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Offsets reserved by other active (non-terminal) specs across the whole registry.
+fn used_offsets(self_project: &str, self_name: &str) -> Result<Vec<u16>> {
+    Ok(load_all()?
+        .into_iter()
+        .filter(|s| !(s.project == self_project && s.name == self_name))
+        .filter(|s| !s.phase.is_terminal())
+        .filter_map(|s| s.offset)
+        .collect())
+}
+
+fn port_is_free(port: u16) -> bool {
+    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
 fn config_cmd(op: &ConfigOp) -> Result<()> {
@@ -168,9 +216,7 @@ fn config_cmd(op: &ConfigOp) -> Result<()> {
 
 fn build_payload(cmd: Cmd) -> Result<Payload> {
     Ok(match cmd {
-        Cmd::Init { branch, worktree, offset } => {
-            Payload::Init { branch, worktree, ports: Ports::from_offset(offset) }
-        }
+        Cmd::Init { branch, worktree } => Payload::Init { branch, worktree },
         Cmd::Phase { phase, reason } => Payload::PhaseEnter { phase: parse_phase(&phase)?, reason },
         Cmd::Block { reason } => Payload::Block { reason },
         Cmd::Unblock => Payload::Unblock,
@@ -203,7 +249,9 @@ fn build_payload(cmd: Cmd) -> Result<Payload> {
         Cmd::Note { level, topic, text } => {
             Payload::Note { level: parse_level(&level)?, topic, text }
         }
-        Cmd::Ls | Cmd::Config { .. } => unreachable!("handled before payload build"),
+        Cmd::Ls | Cmd::Config { .. } | Cmd::Ports { .. } => {
+            unreachable!("handled before payload build")
+        }
     })
 }
 
@@ -215,7 +263,7 @@ fn ls() -> Result<()> {
         println!("No specs with state.json yet — run `dex …` from the /spec skill.");
         return Ok(());
     }
-    println!("{:<22} {:<28} {:<10} {:<10} {}", "PROJECT", "SPEC", "PHASE", "HEALTH", "PR");
+    println!("{:<22} {:<28} {:<10} {:<10} PR", "PROJECT", "SPEC", "PHASE", "HEALTH");
     for s in specs {
         let health = s.health(now, 15 * 60);
         let pr = s.pr.as_ref().map(|p| format!("#{}", p.number)).unwrap_or_default();

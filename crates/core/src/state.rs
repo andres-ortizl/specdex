@@ -1,10 +1,12 @@
 //! The derived snapshot. `state.json` is the last-known state of a spec, rewritten
 //! on every event so the fleet view is a single cheap read per spec — no log scan.
 
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::event::{Payload, Phase, Ports};
+use crate::event::{Payload, Phase};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSnapshot {
@@ -43,7 +45,9 @@ pub struct SpecState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ports: Option<Ports>,
+    pub offset: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ports: Option<BTreeMap<String, u16>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pr: Option<PrRef>,
     #[serde(default)]
@@ -72,6 +76,7 @@ impl SpecState {
             phase: Phase::Setup,
             branch: None,
             worktree: None,
+            offset: None,
             ports: None,
             pr: None,
             review_round: 0,
@@ -89,10 +94,13 @@ impl SpecState {
     pub fn apply(&mut self, p: &Payload, now: DateTime<Utc>) {
         self.updated_at = now;
         match p {
-            Payload::Init { branch, worktree, ports } => {
+            Payload::Init { branch, worktree } => {
                 self.branch = Some(branch.clone());
                 self.worktree = Some(worktree.clone());
-                self.ports = Some(*ports);
+            }
+            Payload::PortsAssigned { offset, ports } => {
+                self.offset = Some(*offset);
+                self.ports = Some(ports.clone());
             }
             Payload::PhaseEnter { phase, .. } => {
                 self.phase = *phase;

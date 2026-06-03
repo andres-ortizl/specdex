@@ -1,16 +1,17 @@
 pub mod config;
 pub mod event;
 pub mod paths;
+pub mod ports;
 pub mod state;
 
 pub use config::{
     get_dotted, load_effective, reactor_for, schema, validate, Action, Effective, HookPoint,
-    Identity, Providers,
+    Identity, PortSpec, Providers,
 };
 pub use event::{
-    validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, Ports, Role,
-    Verdict,
+    validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, Role, Verdict,
 };
+pub use ports::pick_offset;
 pub use state::{AgentSnapshot, GateSummary, Health, PrRef, SpecState, TestSummary};
 
 use std::fs::{self, OpenOptions};
