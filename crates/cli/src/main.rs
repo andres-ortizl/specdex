@@ -113,6 +113,23 @@ enum Cmd {
         topic: String,
         #[arg(long)]
         text: String,
+        #[arg(long)]
+        scope: Option<String>,
+    },
+    /// Aggregate notes across all specs in the registry
+    Notes {
+        /// Filter by scope (spec|project|skill)
+        #[arg(long)]
+        scope: Option<String>,
+        /// Filter by topic
+        #[arg(long)]
+        topic: Option<String>,
+        /// Filter by level (info|warn|error)
+        #[arg(long)]
+        level: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
     /// List every spec in the fleet with derived health
     Ls,
@@ -174,6 +191,9 @@ fn main() -> Result<()> {
         Cmd::Watch => return watch(),
         Cmd::Config { ref op } => return config_cmd(op),
         Cmd::Install { ref update } => return install(*update),
+        Cmd::Notes { ref scope, ref topic, ref level, json } => {
+            return notes_cmd(scope.as_deref(), topic.as_deref(), level.as_deref(), json);
+        }
         _ => {}
     }
     let spec = cli
@@ -390,10 +410,11 @@ fn build_payload(cmd: Cmd) -> Result<Payload> {
             }
         }
         Cmd::Pr { number, url, state } => Payload::Pr { number, url, state: parse_pr_state(&state)? },
-        Cmd::Note { level, topic, text } => {
-            Payload::Note { level: parse_level(&level)?, topic, text }
+        Cmd::Note { level, topic, text, scope } => {
+            let validated_scope = scope.map(|s| parse_scope(&s)).transpose()?;
+            Payload::Note { level: parse_level(&level)?, topic, text, scope: validated_scope }
         }
-        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } | Cmd::Install { .. } => {
+        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } | Cmd::Install { .. } | Cmd::Notes { .. } => {
             unreachable!("handled before payload build")
         }
     })
@@ -526,10 +547,88 @@ fn parse_level(s: &str) -> Result<NoteLevel> {
     })
 }
 
+fn parse_scope(s: &str) -> Result<String> {
+    match s {
+        "spec" | "project" | "skill" => Ok(s.to_string()),
+        o => Err(anyhow!("unknown scope: {o} (expected spec|project|skill)")),
+    }
+}
+
+fn notes_cmd(scope: Option<&str>, topic: Option<&str>, level: Option<&str>, json: bool) -> Result<()> {
+    use specdex_core::{filter_notes, group_by_topic, load_all_notes};
+    let all = load_all_notes()?;
+    let filtered: Vec<_> = filter_notes(&all, scope, topic, level)
+        .into_iter()
+        .cloned()
+        .collect();
+
+    if json {
+        println!("{}", serde_json::to_string(&filtered)?);
+        return Ok(());
+    }
+
+    if filtered.is_empty() {
+        println!("No notes found.");
+        return Ok(());
+    }
+
+    let groups = group_by_topic(&filtered);
+    for (topic_name, notes) in &groups {
+        println!("\n{} ({})", topic_name, notes.len());
+        for n in notes {
+            let scope_str = n.scope.as_deref().unwrap_or("—");
+            let actor_str = n.actor.as_deref().unwrap_or("?");
+            println!(
+                "  [{}] {}/{} · {} · {}",
+                n.level, n.project, n.spec, actor_str, scope_str
+            );
+            println!("       {}", n.text);
+            println!("       {}", fmt_ago(&n.time));
+        }
+    }
+    Ok(())
+}
+
+fn fmt_ago(t: &chrono::DateTime<chrono::Utc>) -> String {
+    let diff = chrono::Utc::now().signed_duration_since(*t);
+    let s = diff.num_seconds();
+    if s < 60 {
+        return format!("{}s ago", s);
+    }
+    let m = diff.num_minutes();
+    if m < 60 {
+        return format!("{}m ago", m);
+    }
+    let h = diff.num_hours();
+    if h < 24 {
+        return format!("{}h ago", h);
+    }
+    format!("{}d ago", diff.num_days())
+}
+
 fn trunc(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
     } else {
         format!("{}…", &s[..max - 1])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_scope_accepts_valid_values() {
+        assert_eq!(parse_scope("spec").unwrap(), "spec");
+        assert_eq!(parse_scope("project").unwrap(), "project");
+        assert_eq!(parse_scope("skill").unwrap(), "skill");
+    }
+
+    #[test]
+    fn parse_scope_rejects_invalid() {
+        assert!(parse_scope("bogus").is_err());
+        assert!(parse_scope("").is_err());
+        assert!(parse_scope("SKILL").is_err());
     }
 }

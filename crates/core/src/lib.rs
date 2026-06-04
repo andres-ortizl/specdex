@@ -1,5 +1,6 @@
 pub mod config;
 pub mod event;
+pub mod notes;
 pub mod paths;
 pub mod ports;
 pub mod state;
@@ -16,6 +17,7 @@ pub use event::{
     validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, PrState, Role,
     SpecMode, Verdict,
 };
+pub use notes::{filter_notes, group_by_topic, load_all_notes, AggregatedNote};
 pub use ports::pick_offset;
 pub use swarm::{
     argv_contains_parent_session, find_swarm_socket, is_swarm_socket_name, read_team_panes,
