@@ -1473,7 +1473,8 @@ h1, h2 { margin: 0; }
 :root[data-theme="dark"] .vt-knob { background: radial-gradient(circle at 36% 30%, #3a372f, #2a2720); }
 .view-toggle[aria-checked="true"] .vt-knob { transform: translateX(16px); }
 .view-toggle[aria-checked="true"] .vt-track {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ember) 22%, #ebeae7), color-mix(in srgb, var(--ember) 14%, #f3f2ef));
+  /* match the attach push-button's saturated ember face, not a faint tint */
+  background: linear-gradient(180deg, #f4844a, var(--ember) 58%, #cf4d10);
 }
 
 .brand-nav-btn {
