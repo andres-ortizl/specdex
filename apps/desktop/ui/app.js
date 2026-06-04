@@ -665,15 +665,22 @@ function updateTeamPanesPanel(result, project, name) {
 const SB_EXPANDED = new Set();
 const SB_CONFIG = {};
 
+// Active project filter for the fleet grid (null = show every project's specs).
+let PROJECT_FILTER = null;
+
 function renderFleet(rows) {
   LAST_FLEET = rows || [];
+  // Drop a stale filter if its project left the fleet, so the grid never strands empty.
+  if (PROJECT_FILTER && !LAST_FLEET.some((r) => r.project === PROJECT_FILTER)) PROJECT_FILTER = null;
   renderSidebar(LAST_FLEET);
   const fleetEl = document.getElementById("fleet");
   const listwrap = document.getElementById("listwrap");
   const list = document.getElementById("list");
   const count = document.getElementById("fleet-count");
 
-  if (!rows || rows.length === 0) {
+  const visible = PROJECT_FILTER ? LAST_FLEET.filter((r) => r.project === PROJECT_FILTER) : LAST_FLEET;
+
+  if (visible.length === 0) {
     fleetEl.textContent = "";
     const empty = el(
       "div", null,
@@ -688,8 +695,9 @@ function renderFleet(rows) {
     return;
   }
 
-  count.textContent = rows.length + (rows.length === 1 ? " spec" : " specs");
-  const sorted = sortRows(rows);
+  count.textContent = visible.length + (visible.length === 1 ? " spec" : " specs") +
+    (PROJECT_FILTER ? " · " + PROJECT_FILTER : "");
+  const sorted = sortRows(visible);
 
   const onFleet = document.getElementById("detail").hidden;
   if (onFleet) {
@@ -732,6 +740,21 @@ function tickLiveness() {
 // ============================ sidebar ============================
 // Projects (grouped from the fleet) → expand to read-only config + nested specs.
 
+// Toggle the fleet grid's project filter and surface the result (jump back to the
+// fleet view if we're currently in a detail/signals view).
+function setProjectFilter(project) {
+  PROJECT_FILTER = PROJECT_FILTER === project ? null : project;
+  const detailEl = document.getElementById("detail");
+  const signalsEl = document.getElementById("signals");
+  const onFleet = detailEl.hidden && (!signalsEl || signalsEl.hidden);
+  if (!onFleet) {
+    showView("fleet");
+    location.hash = "";
+    CURRENT_DETAIL = null;
+  }
+  renderFleet(LAST_FLEET);
+}
+
 function renderSidebar(rows) {
   const root = document.getElementById("sidebar");
   if (!root) return;
@@ -753,25 +776,39 @@ function renderSidebar(rows) {
 
   byProject.forEach((specs, project) => {
     const open = SB_EXPANDED.has(project);
-    const section = el("section", "sb-project" + (open ? " open" : ""));
+    const active = PROJECT_FILTER === project;
+    const section = el("section", "sb-project" + (open ? " open" : "") + (active ? " active" : ""));
     section.dataset.project = project;
 
-    const head = el("button", "sb-proj-head");
-    head.type = "button";
-    head.setAttribute("aria-expanded", open ? "true" : "false");
-    head.appendChild(el("span", "sb-btn"));
-    const name = el("span", "sb-proj-name");
-    name.textContent = project;
-    name.title = project;
-    head.appendChild(name);
-    const count = el("span", "sb-proj-count");
-    count.textContent = specs.length;
-    head.appendChild(count);
-    head.addEventListener("click", () => {
+    const head = el("div", "sb-proj-head");
+
+    // The drams LED button is its own control: it toggles the read-only config.
+    const toggle = el("button", "sb-btn");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-label", (open ? "Hide " : "Show ") + project + " config");
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (SB_EXPANDED.has(project)) SB_EXPANDED.delete(project);
       else SB_EXPANDED.add(project);
       renderSidebar(LAST_FLEET);
     });
+    head.appendChild(toggle);
+
+    // The row body filters the fleet grid to this project (click again to clear).
+    const main = el("button", "sb-proj-main");
+    main.type = "button";
+    main.setAttribute("aria-pressed", active ? "true" : "false");
+    const name = el("span", "sb-proj-name");
+    name.textContent = project;
+    name.title = project;
+    main.appendChild(name);
+    const count = el("span", "sb-proj-count");
+    count.textContent = specs.length;
+    main.appendChild(count);
+    main.addEventListener("click", () => setProjectFilter(project));
+    head.appendChild(main);
+
     section.appendChild(head);
 
     if (open) {

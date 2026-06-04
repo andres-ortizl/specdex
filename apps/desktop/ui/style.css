@@ -141,12 +141,16 @@ h1, h2 { margin: 0; }
 }
 .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
-.brand-mark {                         /* drams uses circles for marks */
-  width: 8px; height: 8px;
-  border-radius: var(--r-pill);
-  background: var(--ember);
+.brand-mark {                         /* hexagon spec-node mark in ember */
+  display: inline-flex;
+  width: 20px; height: 20px;
   margin-right: 2px;
+  color: var(--ember);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--ember) 32%, transparent));
 }
+.brand-mark svg { width: 100%; height: 100%; display: block; }
+.brand-mark .bm-hex { opacity: .9; }
+.brand:hover .brand-mark { color: color-mix(in srgb, var(--ember) 88%, #fff); }
 
 .brand-name {
   font-size: 20px;
@@ -1072,8 +1076,16 @@ h1, h2 { margin: 0; }
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  width: calc(100% - var(--s-4));
   margin: 2px var(--s-2);
+}
+
+/* the row body is the filter control: click to scope the grid to this project */
+.sb-proj-main {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
   background: none;
   border: none;
   cursor: pointer;
@@ -1085,22 +1097,33 @@ h1, h2 { margin: 0; }
   transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
               box-shadow var(--dur-fast) var(--ease);
 }
-.sb-proj-head:hover {
+.sb-proj-main:hover {
   color: var(--accent);
   background: var(--surface);
   box-shadow: var(--lift-1);          /* the row lifts off the sunk sidebar */
 }
-.sb-proj-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sb-proj-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* active filter: the row glows ember with an inset edge marker */
+.sb-project.active .sb-proj-main,
+.sb-project.active .sb-proj-main:hover {
+  color: var(--ember);
+  background: var(--ember-soft);
+  box-shadow: inset 2px 0 0 var(--ember);
+}
+.sb-project.active .sb-proj-name { font-weight: 600; }
 
 /* a tiny drams push-button instead of a chevron: domed + raised, its LED dark.
    When the project group is open the dome presses in and the LED lights ember. */
 .sb-btn {
   position: relative;
   width: 16px; height: 16px; border-radius: 50%; flex: none;
+  border: none; padding: 0; cursor: pointer;
   background: linear-gradient(180deg, #fbfbfa, #e6e4df);
   box-shadow: var(--lift-1);
   transition: box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
+.sb-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sb-btn::after {
   content: "";
   position: absolute; top: 50%; left: 50%;
