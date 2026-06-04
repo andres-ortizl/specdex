@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use notify::{RecursiveMode, Watcher};
 use specdex_core::{
-    attach_argv, config_view, find_swarm_socket, fleet_snapshot, load_all, load_logbook,
-    load_spec_doc, load_state, paths, project_config as core_project_config, project_config_raw,
-    read_events, read_team_panes, watch_team_argv, FleetRow,
+    attach_argv, config_view, find_swarm_socket, fleet_snapshot, load_all, load_all_notes,
+    load_logbook, load_spec_doc, load_state, paths, project_config as core_project_config,
+    project_config_raw, read_events, read_team_panes, watch_team_argv, AggregatedNote, FleetRow,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -24,6 +24,12 @@ fn snapshot() -> Vec<FleetRow> {
 #[tauri::command]
 fn fleet() -> Vec<FleetRow> {
     snapshot()
+}
+
+/// Aggregated notes across the whole registry — the curator's signals plane.
+#[tauri::command]
+fn signals() -> Vec<AggregatedNote> {
+    load_all_notes().unwrap_or_default()
 }
 
 /// Full detail for one spec: snapshot state, derived health, the event log, the
@@ -123,14 +129,20 @@ fn emit_fleet(handle: &AppHandle) {
     let _ = handle.emit("fleet", snapshot());
 }
 
+fn emit_signals(handle: &AppHandle) {
+    let notes = load_all_notes().unwrap_or_default();
+    let _ = handle.emit("signals", notes);
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![fleet, spec_detail, project_config, attach_terminal, team_panes, watch_team])
+        .invoke_handler(tauri::generate_handler![fleet, signals, spec_detail, project_config, attach_terminal, team_panes, watch_team])
         .setup(|app| {
             let handle = app.handle().clone();
             // Watch the registry off-thread; push a fresh snapshot to the webview on change.
             std::thread::spawn(move || {
                 emit_fleet(&handle);
+                emit_signals(&handle);
                 let root = match paths::spec_root() {
                     Ok(r) if r.exists() => r,
                     _ => return,
@@ -149,6 +161,7 @@ fn main() {
                     while rx.try_recv().is_ok() {} // coalesce a burst
                     std::thread::sleep(Duration::from_millis(80));
                     emit_fleet(&handle);
+                    emit_signals(&handle);
                 }
             });
             Ok(())

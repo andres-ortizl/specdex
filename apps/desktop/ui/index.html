@@ -22,8 +22,14 @@
     <a class="brand" id="brand-home" href="#" aria-label="Back to fleet">
       <span class="brand-mark" aria-hidden="true"></span>
       <h1 class="brand-name">specdex</h1>
-      <span class="brand-sub">fleet</span>
     </a>
+    <nav class="brand-nav" aria-label="Views">
+      <button type="button" id="nav-agents" class="brand-nav-btn">agents</button>
+      <button type="button" id="view-toggle" class="view-toggle" role="switch" aria-checked="false" aria-label="Switch between agents and signals">
+        <span class="vt-track" aria-hidden="true"><span class="vt-knob"></span></span>
+      </button>
+      <button type="button" id="nav-signals" class="brand-nav-btn">Signals</button>
+    </nav>
 
     <div class="topbar-right">
       <div id="fleet-controls">
@@ -43,6 +49,15 @@
           <button type="button" data-sort="name">Name</button>
         </div>
         <span class="fleet-count" id="fleet-count"></span>
+        <span class="topbar-sep" aria-hidden="true"></span>
+      </div>
+      <div id="signals-controls" hidden>
+        <div class="fleet-sort" id="signals-scope" role="group" aria-label="Scope filter">
+          <button type="button" data-scope="all" aria-pressed="true">All</button>
+          <button type="button" data-scope="spec" aria-pressed="false">Spec</button>
+          <button type="button" data-scope="project" aria-pressed="false">Project</button>
+          <button type="button" data-scope="skill" aria-pressed="false">Skill</button>
+        </div>
         <span class="topbar-sep" aria-hidden="true"></span>
       </div>
       <button class="theme-toggle" id="theme-toggle" type="button"
@@ -73,6 +88,7 @@
         <div class="list" id="list" role="table"></div>
       </section>
       <main class="detail" id="detail" aria-label="Spec detail" hidden></main>
+      <main class="signals-view" id="signals" aria-label="Signals" hidden></main>
     </div>
   </div>
 

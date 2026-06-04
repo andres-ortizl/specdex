@@ -213,7 +213,7 @@ pub enum Payload {
     Review { round: u32, verdict: Verdict, blockers: u32, issues: u32 },
     Gate { provider: GateProvider, name: Option<String>, result: GateResult, score: Option<u8> },
     Pr { number: u64, url: String, state: PrState },
-    Note { level: NoteLevel, topic: String, text: String },
+    Note { level: NoteLevel, topic: String, text: String, scope: Option<String> },
 }
 
 impl Payload {
@@ -281,8 +281,12 @@ impl Payload {
             Payload::Pr { number, url, state } => {
                 json!({ "number": number, "url": url, "state": state })
             }
-            Payload::Note { level, topic, text } => {
-                json!({ "level": level, "topic": topic, "text": text })
+            Payload::Note { level, topic, text, scope } => {
+                let mut m = json!({ "level": level, "topic": topic, "text": text });
+                if let Some(s) = scope {
+                    m["scope"] = json!(s);
+                }
+                m
             }
         }
     }
@@ -398,5 +402,25 @@ mod tests {
         let ev = p.into_event("/spec/proj/feat".into(), Some("lead".into()), Utc::now());
         assert_eq!(ev.source, "/spec/proj/feat");
         assert_eq!(ev.actor.as_deref(), Some("lead"));
+    }
+
+    #[test]
+    fn note_scope_recorded_in_data() {
+        let p = Payload::Note { level: NoteLevel::Warn, topic: "env/git".into(), text: "t".into(), scope: Some("skill".into()) };
+        assert_eq!(p.data()["scope"], "skill");
+    }
+
+    #[test]
+    fn note_scope_absent_when_none() {
+        let p = Payload::Note { level: NoteLevel::Info, topic: "t".into(), text: "x".into(), scope: None };
+        assert!(p.data()["scope"].is_null());
+    }
+
+    #[test]
+    fn old_note_without_scope_parses_as_event() {
+        let line = r#"{"type":"note","time":"2024-01-01T00:00:00Z","source":"/spec/p/f","data":{"level":"warn","topic":"test","text":"old note"}}"#;
+        let ev: Event = serde_json::from_str(line).expect("old note should parse");
+        assert_eq!(ev.kind, "note");
+        assert!(ev.data["scope"].is_null());
     }
 }
