@@ -64,6 +64,30 @@ const FLEET = [
   },
 ];
 
+// Sample signals for the standalone prototype.
+const SAMPLE_SIGNALS = [
+  { project: "anyformat-backend", spec: "verify-flake", actor: "reviewer",
+    level: "warn", topic: "test-flake", scope: "project",
+    text: "CI N+1 query flake in results-serializer — symptom: intermittent test failure; detected: CI; root-cause: unordered join; fix: add ORDER BY",
+    time: ISO(44 * 60_000) },
+  { project: "anyformat-backend", spec: "parse-cache", actor: "coder",
+    level: "error", topic: "env/git", scope: "skill",
+    text: "git worktree add fails with 'fatal: branch already checked out' — symptom: worktree creation error; root-cause: stale ref; fix: git worktree prune first",
+    time: ISO(2 * 3600_000) },
+  { project: "anyformat-frontend", spec: "results-virtualize", actor: "coder",
+    level: "info", topic: "orchestration", scope: "project",
+    text: "Parallelized three independent chunks (data-layer, component, tests) via sub-agents — 40% faster wall-clock",
+    time: ISO(30 * 60_000) },
+  { project: "specdex", spec: "fleet-watch", actor: "lead",
+    level: "warn", topic: "review-finding", scope: "skill",
+    text: "Reviewer flagged missing serde(default) on new field — symptom: deserialize panic on old events; fix: always add default+skip on Option fields",
+    time: ISO(90 * 60_000) },
+  { project: "anyformat-backend", spec: "timeseries-perf", actor: "coder",
+    level: "info", topic: "skill/rust", scope: "skill",
+    text: "cargo test with --test-threads=1 needed for integration tests sharing a DB — document in test setup",
+    time: ISO(15 * 60_000) },
+];
+
 // Sample spec_detail payloads, keyed "project/name", for the standalone prototype.
 function sampleDetail(project, name) {
   const t = (ms) => ISO(ms);
@@ -521,6 +545,8 @@ function renderListRow(row) {
 }
 
 let LAST_FLEET = [];
+let LAST_SIGNALS = [];
+let SIGNALS_SCOPE_FILTER = "all";
 
 // Fleet sort: "recent" (last activity), "state" (health), or "name". Persisted.
 const FLEET_SORTS = ["recent", "state", "name"];
@@ -1400,17 +1426,119 @@ function renderMarkdown(text) {
   return div;
 }
 
+// ============================ signals ============================
+
+async function loadAndRenderSignals() {
+  let notes;
+  const t = window.__TAURI__;
+  if (t && t.core) {
+    notes = await t.core.invoke("signals").catch(() => []);
+  } else {
+    notes = SAMPLE_SIGNALS;
+  }
+  LAST_SIGNALS = notes || [];
+  renderSignals(LAST_SIGNALS);
+}
+
+function renderSignals(notes) {
+  const root = document.getElementById("signals");
+  if (!root) return;
+  root.textContent = "";
+
+  const filtered = SIGNALS_SCOPE_FILTER === "all"
+    ? notes
+    : notes.filter((n) => n.scope === SIGNALS_SCOPE_FILTER);
+
+  if (filtered.length === 0) {
+    const empty = el("div", "sig-empty");
+    empty.textContent = SIGNALS_SCOPE_FILTER === "all"
+      ? "No notes yet. Agents emit notes with \`dex note --scope skill|project|spec …\`."
+      : "No notes with scope “" + SIGNALS_SCOPE_FILTER + "” yet.";
+    root.appendChild(empty);
+    return;
+  }
+
+  const byTopic = new Map();
+  filtered.forEach((n) => {
+    if (!byTopic.has(n.topic)) byTopic.set(n.topic, []);
+    byTopic.get(n.topic).push(n);
+  });
+  const sortedTopics = [...byTopic.keys()].sort();
+
+  sortedTopics.forEach((topic) => {
+    const group = el("div", "sig-group");
+
+    const header = el("div", "sig-topic-head");
+    const topicLabel = el("span", "sig-topic-name");
+    topicLabel.textContent = topic;
+    const count = el("span", "sig-topic-count");
+    count.textContent = byTopic.get(topic).length;
+    header.appendChild(topicLabel);
+    header.appendChild(count);
+    group.appendChild(header);
+
+    const rows = [...byTopic.get(topic)].sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+    rows.forEach((n) => {
+      const row = el("div", "sig-row");
+      row.dataset.level = n.level;
+
+      const meta = el("div", "sig-meta");
+      const spec = el("span", "sig-spec");
+      spec.textContent = n.project + "/" + n.spec;
+      spec.title = n.project + "/" + n.spec;
+      meta.appendChild(spec);
+
+      if (n.actor) {
+        const actor = el("span", "sig-actor");
+        actor.textContent = n.actor;
+        meta.appendChild(actor);
+      }
+
+      if (n.scope) {
+        const scope = el("span", "sig-scope-tag");
+        scope.textContent = n.scope;
+        meta.appendChild(scope);
+      }
+
+      const time = el("span", "sig-time");
+      time.textContent = relTime(n.time);
+      time.title = n.time || "";
+      meta.appendChild(time);
+
+      row.appendChild(meta);
+
+      const body = el("div", "sig-body");
+      const dot = el("span", "sig-dot");
+      dot.dataset.level = n.level;
+      body.appendChild(dot);
+      const text = el("span", "sig-text");
+      text.textContent = n.text;
+      body.appendChild(text);
+      row.appendChild(body);
+
+      group.appendChild(row);
+    });
+
+    root.appendChild(group);
+  });
+}
+
 // ============================ routing ============================
 
 function showView(view) {
   const onFleet = view === "fleet";
+  const onSignals = view === "signals";
   const legend = document.getElementById("legend");
   const controls = document.getElementById("fleet-controls");
+  const sigControls = document.getElementById("signals-controls");
   const listwrap = document.getElementById("listwrap");
+  const signalsEl = document.getElementById("signals");
 
   if (legend) legend.hidden = !onFleet;
   if (controls) controls.hidden = !onFleet;
-  document.getElementById("detail").hidden = onFleet;
+  if (sigControls) sigControls.hidden = !onSignals;
+  document.getElementById("detail").hidden = view !== "detail";
+  if (signalsEl) signalsEl.hidden = !onSignals;
 
   if (!onFleet) {
     document.getElementById("fleet").hidden = true;
@@ -1419,6 +1547,11 @@ function showView(view) {
     document.getElementById("fleet").hidden = LAYOUT !== "cards";
     listwrap.hidden = LAYOUT !== "list";
   }
+
+  const navFleet = document.getElementById("nav-fleet");
+  const navSignals = document.getElementById("nav-signals");
+  if (navFleet) navFleet.classList.toggle("active", onFleet);
+  if (navSignals) navSignals.classList.toggle("active", onSignals);
 }
 
 async function loadDetail(project, name) {
@@ -1443,6 +1576,12 @@ async function navigate(route) {
     showView("detail");
     renderSidebar(LAST_FLEET);
     location.hash = "#/spec/" + encodeURIComponent(route.project) + "/" + encodeURIComponent(route.name);
+  } else if (route.view === "signals") {
+    CURRENT_DETAIL = null;
+    await loadAndRenderSignals();
+    showView("signals");
+    renderSidebar(LAST_FLEET);
+    location.hash = "#/signals";
   } else {
     showView("fleet");
     location.hash = "";
@@ -1453,6 +1592,7 @@ async function navigate(route) {
 }
 
 function routeFromHash() {
+  if (location.hash === "#/signals") { navigate({ view: "signals" }); return; }
   const m = location.hash.match(/^#\/spec\/([^/]+)\/([^/]+)$/);
   if (m) navigate({ view: "detail", project: decodeURIComponent(m[1]), name: decodeURIComponent(m[2]) });
   else showView("fleet");
@@ -1513,6 +1653,22 @@ function initFleetSort() {
   paint();
 }
 
+function initSignalsScope() {
+  const group = document.getElementById("signals-scope");
+  if (!group) return;
+  const buttons = group.querySelectorAll("button[data-scope]");
+  const paint = () =>
+    buttons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.scope === SIGNALS_SCOPE_FILTER ? "true" : "false"));
+  buttons.forEach((b) =>
+    b.addEventListener("click", () => {
+      SIGNALS_SCOPE_FILTER = b.dataset.scope;
+      paint();
+      renderSignals(LAST_SIGNALS);
+    })
+  );
+  paint();
+}
+
 function initLayoutToggle() {
   const group = document.getElementById("layout-toggle");
   if (!group) return;
@@ -1535,8 +1691,15 @@ function boot() {
     e.preventDefault();
     navigate({ view: "fleet" });
   });
+
+  const navFleet = document.getElementById("nav-fleet");
+  const navSignals = document.getElementById("nav-signals");
+  if (navFleet) navFleet.addEventListener("click", () => navigate({ view: "fleet" }));
+  if (navSignals) navSignals.addEventListener("click", () => navigate({ view: "signals" }));
+
   initLayoutToggle();
   initFleetSort();
+  initSignalsScope();
   window.addEventListener("hashchange", routeFromHash);
 
   const t = window.__TAURI__;
@@ -1547,6 +1710,12 @@ function boot() {
       if (CURRENT_DETAIL && !document.getElementById("detail").hidden) {
         // fleet payload only repaints the list; re-pull the open spec for live detail
         loadDetail(CURRENT_DETAIL.state.project, CURRENT_DETAIL.state.name).then(renderDetail);
+      }
+    });
+    t.event.listen("signals", (e) => {
+      LAST_SIGNALS = e.payload || [];
+      if (!document.getElementById("signals").hidden) {
+        renderSignals(LAST_SIGNALS);
       }
     });
   } else {
