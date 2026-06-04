@@ -609,3 +609,74 @@ Rejection means the spec needs more iteration, NOT deletion.
 ## Error Handling / Intervention Required
 
 See **`reference/errors.md`** for the intervention DM template, the mandatory fields, and the rules (no blind retries, no destructive git).
+
+## Notes for the curator
+
+`dex note` is the structured signal the curator reads. Emit sparingly — only when something
+is non-obvious or needs to persist across context windows. Routine success is noise.
+
+### When to emit
+
+- A failure that required a workaround (env issue, tool friction, unexpected behavior)
+- A correction or auto-heal (you caught a bug, you deviated from the plan)
+- A surprise that will affect future work
+- A plan deviation (you changed approach from what was planned)
+- A bug-and-how-it-was-caught (test caught X, review caught Y)
+- A retry (third attempt after two failures — note what the others tried)
+
+**Do NOT emit** for: normal progress, routine test runs, successful phase transitions.
+
+### Text convention
+
+`symptom → how-detected → root-cause → fix/workaround`
+
+Example: `cargo test failed with linker error — detected: compile step — root-cause: missing system dep libssl-dev — fix: apt install libssl-dev before build`
+
+Keep it one line or two short sentences. Future readers need the root cause, not the symptoms alone.
+
+### Scope
+
+| Scope | Meaning | Example |
+|---|---|---|
+| `spec` | This specific spec only — one-off, won't recur elsewhere | "reviewer asked for extra test in this spec's acceptance criteria" |
+| `project` | This project/repo — affects future specs in the same repo | "this repo's CI requires --test-threads=1 for integration tests" |
+| `skill` | Tooling or loop-wide — affects all future specdex sessions | "git worktree add fails if branch already checked out — run git worktree prune first" |
+
+When in doubt: `skill` is the highest-signal scope. The curator clusters by scope to find systemic improvements.
+
+### Who emits what
+
+- **Subagent (coder/reviewer):** env failures, tool friction, bugs caught during build/review, unexpected test behavior, retry causes
+- **Lead:** orchestration gotchas, plan deviations, corrections to coder/reviewer misalignment, process surprises
+
+Both roles emit; the `actor` field (set via `DEX_ACTOR`) identifies who.
+
+### Stable topic taxonomy
+
+Use these stable topics so the curator can cluster across sessions:
+
+| Topic | Use for |
+|---|---|
+| `env/<tool>` | Tool-specific env failures (`env/git`, `env/cargo`, `env/docker`) |
+| `skill/<area>` | Skill or loop behavior (`skill/rust`, `skill/tdd`) |
+| `orchestration` | Lead-level process decisions, agent coordination |
+| `plan` | Plan deviations, scope changes, spec-level surprises |
+| `test-flake` | Intermittent or environment-sensitive test failures |
+| `review-finding` | Patterns the reviewer caught that future coders should know |
+
+Free-text topics are allowed but fragment clusters — prefer the stable list.
+
+### Loop hooks where a note is expected
+
+- **Review blocker resolved:** after the coder fixes a BLOCKER finding
+- **Smoke-test/CI catches a bug:** before or after the fix
+- **Lead relocates misplaced work:** when the lead reroutes an agent's output
+- **Missing dep discovered:** when a required tool/library isn't installed
+
+### Command reference
+
+```bash
+dex note --scope skill --topic env/git --text "symptom → detected → cause → fix"
+dex note --scope project --topic test-flake --level warn --text "..."
+dex note --scope spec --topic plan --level info --text "..."
+```
