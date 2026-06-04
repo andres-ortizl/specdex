@@ -811,10 +811,10 @@ h1, h2 { margin: 0; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 .hw-led {
-  width: 7px; height: 7px; border-radius: 50%;
+  width: 6px; height: 6px; border-radius: 50%;
   background: var(--ink-faint); opacity: .5;
   transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
 }
@@ -826,7 +826,7 @@ h1, h2 { margin: 0; }
 }
 .hw-attach.failed .hw-led { background: var(--needs); opacity: 1; }
 .hw-btn {
-  width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
+  width: 36px; height: 36px; border-radius: 50%; border: 0; cursor: pointer;
   padding: 3px;                              /* the thin bezel ring */
   background: linear-gradient(180deg, #fbfbfa, #e6e4df);
   box-shadow: var(--lift);
@@ -842,7 +842,7 @@ h1, h2 { margin: 0; }
   box-shadow: inset 0 1px 1px rgba(255,255,255,.35), inset 0 -2px 4px rgba(0,0,0,.18);
 }
 .hw-face.orange { background: radial-gradient(circle at 38% 30%, #f4844a, var(--ember) 58%, #cf4d10); }
-.hw-face svg { width: 18px; height: 18px; stroke: #fff; fill: none; opacity: .95; }
+.hw-face svg { width: 15px; height: 15px; stroke: #fff; fill: none; opacity: .95; }
 
 /* big phase rail in the header */
 .d-phase { display: flex; flex-direction: column; gap: var(--s-2); }
@@ -1447,14 +1447,33 @@ h1, h2 { margin: 0; }
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin-left: var(--s-3);
 }
 
-.brand-nav-sep {
-  color: var(--ink-faint);
-  font-size: 13px;
-  font-weight: 450;
-  user-select: none;
+/* drams 2-position view toggle (agents ⇄ signals) — neutral on agents, ember on signals */
+.view-toggle {
+  appearance: none; border: 0; background: none; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center;
+}
+.view-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--r-pill); }
+.vt-track {
+  position: relative; display: inline-block;
+  width: 34px; height: 18px; border-radius: var(--r-pill);
+  background: linear-gradient(180deg, #ebeae7, #f3f2ef);
+  box-shadow: var(--press);
+  transition: background var(--dur) var(--ease-soft);
+}
+:root[data-theme="dark"] .vt-track { background: linear-gradient(180deg, #15130e, #1d1a14); }
+.vt-knob {
+  position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #ffffff, #efeeeb 72%, #e4e3df);
+  box-shadow: var(--lift-1);
+  transition: transform var(--dur) cubic-bezier(.34, 1.4, .5, 1);
+}
+:root[data-theme="dark"] .vt-knob { background: radial-gradient(circle at 36% 30%, #3a372f, #2a2720); }
+.view-toggle[aria-checked="true"] .vt-knob { transform: translateX(16px); }
+.view-toggle[aria-checked="true"] .vt-track {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ember) 22%, #ebeae7), color-mix(in srgb, var(--ember) 14%, #f3f2ef));
 }
 
 .brand-nav-btn {

@@ -1149,7 +1149,7 @@ function renderDetail(detail) {
   const back = el("button", "d-back");
   back.type = "button";
   back.innerHTML = ICONS.back;
-  back.appendChild(document.createTextNode("fleet"));
+  back.appendChild(document.createTextNode("agents"));
   back.addEventListener("click", () => navigate({ view: "fleet" }));
   root.appendChild(back);
 
@@ -1560,10 +1560,12 @@ function showView(view) {
     listwrap.hidden = LAYOUT !== "list";
   }
 
-  const navFleet = document.getElementById("nav-fleet");
+  const navAgents = document.getElementById("nav-agents");
   const navSignals = document.getElementById("nav-signals");
-  if (navFleet) navFleet.classList.toggle("active", onFleet);
+  const viewToggle = document.getElementById("view-toggle");
+  if (navAgents) navAgents.classList.toggle("active", onFleet);
   if (navSignals) navSignals.classList.toggle("active", onSignals);
+  if (viewToggle) viewToggle.setAttribute("aria-checked", onSignals ? "true" : "false");
 }
 
 async function loadDetail(project, name) {
@@ -1704,10 +1706,15 @@ function boot() {
     navigate({ view: "fleet" });
   });
 
-  const navFleet = document.getElementById("nav-fleet");
+  const navAgents = document.getElementById("nav-agents");
   const navSignals = document.getElementById("nav-signals");
-  if (navFleet) navFleet.addEventListener("click", () => navigate({ view: "fleet" }));
+  const viewToggle = document.getElementById("view-toggle");
+  if (navAgents) navAgents.addEventListener("click", () => navigate({ view: "fleet" }));
   if (navSignals) navSignals.addEventListener("click", () => navigate({ view: "signals" }));
+  if (viewToggle) viewToggle.addEventListener("click", () => {
+    const toSignals = viewToggle.getAttribute("aria-checked") !== "true";
+    navigate({ view: toSignals ? "signals" : "fleet" });
+  });
 
   initLayoutToggle();
   initFleetSort();
