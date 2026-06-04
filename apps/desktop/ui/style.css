@@ -805,6 +805,45 @@ h1, h2 { margin: 0; }
 .d-attach:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .d-attach svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
 
+/* drams hardware push-button — the orange "attach" CTA (image: pushbuttons) */
+.hw-attach {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.hw-led {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ink-faint); opacity: .5;
+  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+}
+.hw-attach:hover .hw-led { background: var(--ember); opacity: .85; }
+.hw-attach.busy .hw-led {
+  background: var(--ember); opacity: 1;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ember) 16%, transparent);
+  animation: breathe 1.2s var(--ease-soft) infinite;
+}
+.hw-attach.failed .hw-led { background: var(--needs); opacity: 1; }
+.hw-btn {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
+  padding: 3px;                              /* the thin bezel ring */
+  background: linear-gradient(180deg, #fbfbfa, #e6e4df);
+  box-shadow: var(--lift);
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+:root[data-theme="dark"] .hw-btn { background: linear-gradient(180deg, #2c2920, #1b1813); }
+.hw-btn:hover { transform: translateY(-1px); box-shadow: var(--lift-hover); }
+.hw-btn:active { transform: translateY(2px) scale(.97); box-shadow: var(--lift-1); }
+.hw-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hw-face {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.35), inset 0 -2px 4px rgba(0,0,0,.18);
+}
+.hw-face.orange { background: radial-gradient(circle at 38% 30%, #f4844a, var(--ember) 58%, #cf4d10); }
+.hw-face svg { width: 18px; height: 18px; stroke: #fff; fill: none; opacity: .95; }
+
 /* big phase rail in the header */
 .d-phase { display: flex; flex-direction: column; gap: var(--s-2); }
 .d-phase .rail { gap: 0; }

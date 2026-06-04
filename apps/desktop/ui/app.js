@@ -1171,25 +1171,37 @@ function renderDetail(detail) {
   const dbadge = modeBadge(s.mode);
   if (dbadge) titleRow.appendChild(dbadge);
 
-  const attach = el("button", "d-attach");
+  // drams hardware push-button: round glossy orange face + an LED that lights
+  // ember while attaching. Icon-only; the label lives in the tooltip.
+  const attachCell = el("div", "hw-attach");
+  const attachLed = el("span", "hw-led");
+  const attach = el("button", "hw-btn");
   attach.type = "button";
-  attach.innerHTML = ICONS.terminal;
-  attach.appendChild(document.createTextNode("attach in terminal"));
+  attach.title = "attach in terminal";
+  attach.setAttribute("aria-label", "attach in terminal");
+  const attachFace = el("span", "hw-face orange");
+  attachFace.innerHTML = ICONS.terminal;
+  attach.appendChild(attachFace);
+  attachCell.append(attachLed, attach);
   attach.addEventListener("click", () => {
     const t = window.__TAURI__;
+    const reset = () => { attachCell.classList.remove("busy", "failed"); attach.title = "attach in terminal"; };
     if (t && t.core) {
-      attach.lastChild.textContent = "attaching…";
+      attachCell.classList.add("busy");
+      attach.title = "attaching…";
       t.core.invoke("attach_terminal", { project: s.project, name: s.name })
-        .then(() => { attach.lastChild.textContent = "attach in terminal"; })
+        .then(reset)
         .catch(() => {
-          attach.lastChild.textContent = "attach failed";
-          setTimeout(() => { attach.lastChild.textContent = "attach in terminal"; }, 2000);
+          attachCell.classList.remove("busy");
+          attachCell.classList.add("failed");
+          attach.title = "attach failed";
+          setTimeout(reset, 2000);
         });
     } else {
-      attach.lastChild.textContent = "dex attach " + s.name;
+      attach.title = "dex attach " + s.name;
     }
   });
-  titleRow.appendChild(attach);
+  titleRow.appendChild(attachCell);
   head.appendChild(titleRow);
 
   const phaseWrap = el("div", "d-phase");
