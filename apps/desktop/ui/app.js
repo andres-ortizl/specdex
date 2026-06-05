@@ -1621,11 +1621,9 @@ function showView(view) {
   const navAgents = document.getElementById("nav-agents");
   const navSignals = document.getElementById("nav-signals");
   const navCurator = document.getElementById("nav-curator");
-  const viewToggle = document.getElementById("view-toggle");
-  if (navAgents) navAgents.classList.toggle("active", onFleet);
-  if (navSignals) navSignals.classList.toggle("active", onSignals);
-  if (navCurator) navCurator.classList.toggle("active", onCurator);
-  if (viewToggle) viewToggle.setAttribute("aria-checked", onSignals ? "true" : "false");
+  if (navAgents) navAgents.setAttribute("aria-selected", onFleet ? "true" : "false");
+  if (navSignals) navSignals.setAttribute("aria-selected", onSignals ? "true" : "false");
+  if (navCurator) navCurator.setAttribute("aria-selected", onCurator ? "true" : "false");
 }
 
 async function loadDetail(project, name) {
@@ -1776,14 +1774,9 @@ function boot() {
   const navAgents = document.getElementById("nav-agents");
   const navSignals = document.getElementById("nav-signals");
   const navCurator = document.getElementById("nav-curator");
-  const viewToggle = document.getElementById("view-toggle");
   if (navAgents) navAgents.addEventListener("click", () => navigate({ view: "fleet" }));
   if (navSignals) navSignals.addEventListener("click", () => navigate({ view: "signals" }));
   if (navCurator) navCurator.addEventListener("click", () => navigate({ view: "curator" }));
-  if (viewToggle) viewToggle.addEventListener("click", () => {
-    const toSignals = viewToggle.getAttribute("aria-checked") !== "true";
-    navigate({ view: toSignals ? "signals" : "fleet" });
-  });
 
   initLayoutToggle();
   initFleetSort();

@@ -23,14 +23,19 @@
       <span class="brand-mark" aria-hidden="true"></span>
       <h1 class="brand-name">specdex</h1>
     </a>
-    <nav class="brand-nav" aria-label="Views">
-      <button type="button" id="nav-agents" class="brand-nav-btn">agents</button>
-      <button type="button" id="view-toggle" class="view-toggle" role="switch" aria-checked="false" aria-label="Switch between agents and signals">
-        <span class="vt-track" aria-hidden="true"><span class="vt-knob"></span></span>
+    <nav class="view-seg" id="view-seg" aria-label="Views" role="tablist">
+      <button type="button" id="nav-agents" class="seg-btn" role="tab" aria-selected="true">
+        <span class="seg-label">agents</span>
+        <span class="seg-led" aria-hidden="true"></span>
       </button>
-      <button type="button" id="nav-signals" class="brand-nav-btn">Signals</button>
-      <span class="topbar-sep" aria-hidden="true"></span>
-      <button type="button" id="nav-curator" class="brand-nav-btn">Curator</button>
+      <button type="button" id="nav-signals" class="seg-btn" role="tab" aria-selected="false">
+        <span class="seg-label">signals</span>
+        <span class="seg-led" aria-hidden="true"></span>
+      </button>
+      <button type="button" id="nav-curator" class="seg-btn" role="tab" aria-selected="false">
+        <span class="seg-label">curator</span>
+        <span class="seg-led" aria-hidden="true"></span>
+      </button>
     </nav>
 
     <div class="topbar-right">
