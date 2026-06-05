@@ -42,13 +42,20 @@ pub fn group_by_topic(notes: &[AggregatedNote]) -> Vec<(String, Vec<&AggregatedN
 
 /// I/O: read all note events across every spec in the registry.
 pub fn load_all_notes() -> anyhow::Result<Vec<AggregatedNote>> {
-    use std::fs;
     let root = crate::paths::spec_root()?;
-    let mut out = Vec::new();
     if !root.exists() {
-        return Ok(out);
+        return Ok(Vec::new());
     }
-    for project_entry in fs::read_dir(&root)?.flatten() {
+    load_notes_from(&root)
+}
+
+fn load_notes_from(root: &std::path::Path) -> anyhow::Result<Vec<AggregatedNote>> {
+    use std::fs;
+    let mut out = Vec::new();
+    for project_entry in fs::read_dir(root)?.flatten() {
+        if project_entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
         if !project_entry.path().is_dir() {
             continue;
         }
@@ -166,6 +173,26 @@ mod tests {
         ];
         let r = filter_notes(&notes, None, None, None);
         assert_eq!(r.len(), 2);
+    }
+
+    #[test]
+    fn dot_dir_produces_no_notes() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("specdex_notes_dotdir_{nanos}"));
+        let real_spec = root.join("real-project").join("my-spec");
+        let dot_spec = root.join(".curator").join("fake-spec");
+        std::fs::create_dir_all(&real_spec).unwrap();
+        std::fs::create_dir_all(&dot_spec).unwrap();
+        let note_line = r#"{"type":"note","time":"2026-06-05T00:00:00Z","source":"/spec/x/y","data":{"level":"info","topic":"test","text":"hello"}}"#;
+        std::fs::write(real_spec.join("events.jsonl"), note_line).unwrap();
+        std::fs::write(dot_spec.join("events.jsonl"), note_line).unwrap();
+        let notes = super::load_notes_from(&root).unwrap();
+        assert_eq!(notes.len(), 1, "dot-dir must not produce phantom notes");
+        assert_eq!(notes[0].project, "real-project");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

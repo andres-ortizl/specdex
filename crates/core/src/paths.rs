@@ -9,6 +9,10 @@ pub fn spec_root() -> Result<PathBuf> {
     Ok(home.join(".spec"))
 }
 
+pub fn curator_dir() -> Result<PathBuf> {
+    Ok(spec_root()?.join(".curator"))
+}
+
 pub fn spec_dir(project: &str, name: &str) -> Result<PathBuf> {
     Ok(spec_root()?.join(project).join(name))
 }
