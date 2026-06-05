@@ -81,6 +81,7 @@ User describes feature
 | `/specdex <feature description>` | default — plan → implement → review → ship → verify |
 | `/specdex collaborate <feature>` | human-driven session: registers + badges in the fleet, skips the team/PR automation (see Collaborate) |
 | `/specdex configure` | (re)write this project's `.dex.toml` (see Configuration) |
+| `/specdex curate` | run the global curator over the whole `~/.spec` registry → clustered signals + proposed skill/config edits, saved as a report and viewable in the desktop Curator view (see Curate) |
 | `/specdex resume` | re-attach to the most recent non-terminal spec for this project |
 | `/specdex accept` | accept a COMPLETE spec → cleanup |
 | `/specdex --auto-approve <plan-path>` | modifier on default mode (non-interactive) |
@@ -204,6 +205,33 @@ can't be inferred. The CLI is the typed brain; you supply the judgement.
 7. Show the user the final `.dex.toml` + `dex config show`. Confirm it was WRITTEN, not just printed.
 
 This mode does NOT run the dev loop — it only produces config. Run `/specdex <feature>` after.
+
+## Mode: curate (`/specdex curate`)
+
+**Global, read-only.** No worktree, no spec dir, no ports, no team, no PR, no per-spec `dex`
+events. This mode operates across the entire `~/.spec` fleet.
+
+1. Dispatch the `dex-curator` agent — it needs no spec context:
+
+   ```
+   Agent(subagent_type: "dex-curator")
+   ```
+
+2. The agent collects all note events via `dex notes --json`, clusters cross-spec patterns,
+   proposes concrete skill/config edits, and writes its report to
+   `~/.spec/.curator/report-<timestamp>.md`.
+
+3. When the agent returns, read the report it wrote (the path is in the agent's output).
+   Surface a concise summary to the user:
+   - Signal volume (total notes, spec count, date range)
+   - Top clusters (topic, occurrence count, proposed action headline)
+   - The full report path
+
+4. Note that the report is also viewable in the desktop app's **Curator** view, where all
+   runs are listed newest-first and can be browsed without re-running.
+
+5. The curator **proposes** edits only — it does not apply them. The human decides which
+   proposals to act on.
 
 ## Setup
 
