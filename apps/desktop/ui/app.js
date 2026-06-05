@@ -1535,22 +1535,80 @@ function renderSignals(notes) {
   });
 }
 
+// ============================ curator ============================
+
+async function loadAndRenderCurator() {
+  const root = document.getElementById("curator");
+  if (!root) return;
+  root.textContent = "";
+
+  let reports = [];
+  const t = window.__TAURI__;
+  if (t && t.core) {
+    reports = await t.core.invoke("curator_reports").catch(() => []);
+  }
+
+  const rail = el("div", "curator-rail");
+  const pane = el("div", "curator-pane");
+  root.appendChild(rail);
+  root.appendChild(pane);
+
+  if (!reports || reports.length === 0) {
+    const empty = el("div", "curator-empty");
+    empty.textContent = "No curator reports yet. Run /specdex curate to generate one.";
+    rail.appendChild(empty);
+    return;
+  }
+
+  async function selectReport(id, btn) {
+    rail.querySelectorAll(".curator-run").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    let md = "";
+    if (t && t.core) {
+      md = await t.core.invoke("read_curator_report", { id }).catch(() => "");
+    }
+    pane.textContent = "";
+    if (md) {
+      pane.appendChild(renderMarkdown(md));
+    } else {
+      const empty = el("div", "curator-pane-empty");
+      empty.textContent = "No content.";
+      pane.appendChild(empty);
+    }
+  }
+
+  reports.forEach((r, i) => {
+    const btn = el("button", "curator-run");
+    btn.type = "button";
+    const label = el("span", "curator-run-label");
+    label.textContent = relTime(r.time);
+    label.title = r.time || "";
+    btn.appendChild(label);
+    btn.addEventListener("click", () => selectReport(r.id, btn));
+    rail.appendChild(btn);
+    if (i === 0) selectReport(r.id, btn);
+  });
+}
+
 // ============================ routing ============================
 
 function showView(view) {
   const onFleet = view === "fleet";
   const onSignals = view === "signals";
+  const onCurator = view === "curator";
   const legend = document.getElementById("legend");
   const controls = document.getElementById("fleet-controls");
   const sigControls = document.getElementById("signals-controls");
   const listwrap = document.getElementById("listwrap");
   const signalsEl = document.getElementById("signals");
+  const curatorEl = document.getElementById("curator");
 
   if (legend) legend.hidden = !onFleet;
   if (controls) controls.hidden = !onFleet;
   if (sigControls) sigControls.hidden = !onSignals;
   document.getElementById("detail").hidden = view !== "detail";
   if (signalsEl) signalsEl.hidden = !onSignals;
+  if (curatorEl) curatorEl.hidden = !onCurator;
 
   if (!onFleet) {
     document.getElementById("fleet").hidden = true;
@@ -1562,9 +1620,11 @@ function showView(view) {
 
   const navAgents = document.getElementById("nav-agents");
   const navSignals = document.getElementById("nav-signals");
+  const navCurator = document.getElementById("nav-curator");
   const viewToggle = document.getElementById("view-toggle");
   if (navAgents) navAgents.classList.toggle("active", onFleet);
   if (navSignals) navSignals.classList.toggle("active", onSignals);
+  if (navCurator) navCurator.classList.toggle("active", onCurator);
   if (viewToggle) viewToggle.setAttribute("aria-checked", onSignals ? "true" : "false");
 }
 
@@ -1596,6 +1656,12 @@ async function navigate(route) {
     showView("signals");
     renderSidebar(LAST_FLEET);
     location.hash = "#/signals";
+  } else if (route.view === "curator") {
+    CURRENT_DETAIL = null;
+    await loadAndRenderCurator();
+    showView("curator");
+    renderSidebar(LAST_FLEET);
+    location.hash = "#/curator";
   } else {
     showView("fleet");
     location.hash = "";
@@ -1607,6 +1673,7 @@ async function navigate(route) {
 
 function routeFromHash() {
   if (location.hash === "#/signals") { navigate({ view: "signals" }); return; }
+  if (location.hash === "#/curator") { navigate({ view: "curator" }); return; }
   const m = location.hash.match(/^#\/spec\/([^/]+)\/([^/]+)$/);
   if (m) navigate({ view: "detail", project: decodeURIComponent(m[1]), name: decodeURIComponent(m[2]) });
   else showView("fleet");
@@ -1708,9 +1775,11 @@ function boot() {
 
   const navAgents = document.getElementById("nav-agents");
   const navSignals = document.getElementById("nav-signals");
+  const navCurator = document.getElementById("nav-curator");
   const viewToggle = document.getElementById("view-toggle");
   if (navAgents) navAgents.addEventListener("click", () => navigate({ view: "fleet" }));
   if (navSignals) navSignals.addEventListener("click", () => navigate({ view: "signals" }));
+  if (navCurator) navCurator.addEventListener("click", () => navigate({ view: "curator" }));
   if (viewToggle) viewToggle.addEventListener("click", () => {
     const toSignals = viewToggle.getAttribute("aria-checked") !== "true";
     navigate({ view: toSignals ? "signals" : "fleet" });

@@ -1621,6 +1621,64 @@ h1, h2 { margin: 0; }
   text-align: center;
 }
 
+/* ============================ curator view ============================ */
+
+.curator-view {
+  display: flex;
+  align-items: flex-start;
+  min-height: 60vh;
+}
+
+.curator-rail {
+  width: 200px;
+  min-width: 160px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--rule-soft);
+  padding: var(--s-3) 0;
+}
+
+.curator-run {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--s-2) var(--s-4);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  color: var(--ink-muted);
+  border-radius: 0;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.curator-run:hover { background: var(--surface-2); color: var(--ink); }
+.curator-run.active { background: var(--accent-soft); color: var(--accent); }
+.curator-run:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.curator-run-label {
+  font-size: 12.5px;
+  font-weight: 440;
+  font-variant-numeric: tabular-nums;
+}
+
+.curator-pane {
+  flex: 1;
+  padding: var(--s-5) var(--s-6);
+  min-width: 0;
+}
+
+.curator-empty {
+  font-size: 13px;
+  color: var(--ink-faint);
+  padding: var(--s-5) var(--s-4);
+}
+
+.curator-pane-empty {
+  font-size: 13px;
+  color: var(--ink-faint);
+  padding: var(--s-4) 0;
+}
+
 /* ============================ reduced motion ============================ */
 
 @media (prefers-reduced-motion: reduce) {
