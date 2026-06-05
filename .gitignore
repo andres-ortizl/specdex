@@ -2,3 +2,6 @@
 /.claude/
 .env
 .envrc
+
+# personal agent guidelines — symlinked from dotfiles, not shared
+AGENTS.md
