@@ -1,4 +1,5 @@
 pub mod config;
+pub mod curator;
 pub mod event;
 pub mod notes;
 pub mod paths;
@@ -17,6 +18,7 @@ pub use event::{
     validate_score, Event, GateProvider, GateResult, NoteLevel, Payload, Phase, PrState, Role,
     SpecMode, Verdict,
 };
+pub use curator::{list_curator_reports, load_curator_report, CuratorReport};
 pub use notes::{filter_notes, group_by_topic, load_all_notes, AggregatedNote};
 pub use ports::pick_offset;
 pub use swarm::{
@@ -128,11 +130,18 @@ pub fn project_config(project: &str) -> Result<Option<Effective>> {
 /// Read every spec's snapshot across the whole registry.
 pub fn load_all() -> Result<Vec<SpecState>> {
     let root = paths::spec_root()?;
-    let mut out = Vec::new();
     if !root.exists() {
-        return Ok(out);
+        return Ok(Vec::new());
     }
-    for project in fs::read_dir(&root)?.flatten() {
+    load_all_from(&root)
+}
+
+fn load_all_from(root: &std::path::Path) -> Result<Vec<SpecState>> {
+    let mut out = Vec::new();
+    for project in fs::read_dir(root)?.flatten() {
+        if project.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
         if !project.path().is_dir() {
             continue;
         }
@@ -151,6 +160,28 @@ pub fn load_all() -> Result<Vec<SpecState>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dot_dir_produces_no_fleet_entries() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("specdex_fleet_dotdir_{nanos}"));
+        let real_spec = root.join("real-project").join("my-spec");
+        let dot_spec = root.join(".curator").join("fake-spec");
+        std::fs::create_dir_all(&real_spec).unwrap();
+        std::fs::create_dir_all(&dot_spec).unwrap();
+        let now = chrono::Utc::now();
+        let state = SpecState::new("real-project".into(), "my-spec".into(), now);
+        let dot_state = SpecState::new("fake-dot-project".into(), "fake-spec".into(), now);
+        std::fs::write(real_spec.join("state.json"), serde_json::to_string(&state).unwrap()).unwrap();
+        std::fs::write(dot_spec.join("state.json"), serde_json::to_string(&dot_state).unwrap()).unwrap();
+        let states = load_all_from(&root).unwrap();
+        assert_eq!(states.len(), 1, "dot-dir must not produce phantom fleet entries");
+        assert_eq!(states[0].project, "real-project");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn project_config_raw_returns_none_for_unknown_project() {

@@ -10,16 +10,27 @@ You are the global curator for the specdex registry. You operate across the enti
 
 ### 1. Collect all note events across the registry
 
+Primary source (structured, scope-aware):
+
+```bash
+dex notes --json
+```
+
+This returns a JSON array of note objects with `project`, `spec`, `actor`, `level`, `topic`,
+`scope`, `text`, and `time` fields. Use this when `dex` is on PATH.
+
+Fallback (when `dex` is not on PATH):
+
 ```bash
 find ~/.spec -name "events.jsonl" | xargs grep '"type":"note"'
 ```
 
-For each `note` event, extract:
-- `project` + `name` (from the file path)
+For each note, extract:
+- `project` + `name` (from the file path for the fallback, or from the JSON fields)
 - `level` (info / warn / error)
 - `topic`
 - `text`
-- `ts` (timestamp)
+- `time` (timestamp)
 
 Build the full cross-spec note corpus before doing any analysis.
 
@@ -54,7 +65,16 @@ For each cluster with ≥2 occurrences across ≥2 specs, propose a concrete act
 
 ### 4. Output format
 
-Write your report to `~/.spec/curator-report-<YYYY-MM-DD>.md`:
+Write your report to `~/.spec/.curator/report-<timestamp>.md`.
+Create the directory and generate the slug first:
+
+```bash
+mkdir -p ~/.spec/.curator
+TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%S)
+REPORT_PATH=~/.spec/.curator/report-${TIMESTAMP}.md
+```
+
+Then write the report to `$REPORT_PATH`. The full report format:
 
 ```markdown
 # Curator Report — <date>
@@ -81,7 +101,7 @@ Write your report to `~/.spec/curator-report-<YYYY-MM-DD>.md`:
 <topics with only 1 occurrence, listed briefly — may become patterns later>
 ```
 
-Print the report path when done.
+Print `$REPORT_PATH` when done so the caller knows where the report was written.
 
 ## What you do NOT do
 
