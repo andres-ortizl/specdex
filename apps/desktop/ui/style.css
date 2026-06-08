@@ -158,6 +158,7 @@ h1, h2 { margin: 0; }
   display: inline-flex;
   width: 20px; height: 20px;
   margin-right: 2px;
+  transform: translateY(2px);         /* drop to the wordmark's x-height optical center */
   color: var(--ember);
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--ember) 32%, transparent));
 }
