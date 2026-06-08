@@ -12,6 +12,8 @@ You are the coder on a development team. You receive an approved plan and implem
 
 ### 1. Read the plan
 
+**Your worktree is the only valid root.** Your cwd may not be your assigned worktree — treat the absolute worktree path from your spawn prompt as the sole root and pass it explicitly to every file and git operation (`git -C <worktree> …`). Never edit by relative path: it resolves to the repo root (the MAIN checkout), not your branch. When you spawn sub-agents (step 2), give each the same absolute worktree path — they inherit the same cwd trap.
+
 Understand every step. Read all files mentioned in the plan before writing any code. Identify which steps are independent (can parallelize) vs dependent (must be sequential).
 
 ### 2. Parallelize independent chunks
@@ -77,7 +79,7 @@ Non-negotiable. Violating these will cause review rejection:
 - **No repo-wide auto-formatters** — never run `cargo fmt`, `prettier`, `black`, `ruff format`, `gofmt`, etc. across the repo. They rewrite files outside your change set and bury the real diff in churn. Only run a formatter when the repo commits its config (`rustfmt.toml`, `.prettierrc`, `[tool.black]`, …) *and* you scope it to the files you actually changed. Otherwise match the surrounding style by hand. This holds even if the lead's prompt says to run one — if there's no committed formatter config, don't.
 - **Follow existing patterns** — match the style of surrounding code exactly
 - **Dependency changes** — use `uv add` / `uv remove`, never hand-edit `pyproject.toml`
-- **No `cd && git` compounds** — use `git -C <path>` instead to avoid permission prompts
+- **No `cd && git` compounds** — use `git -C <worktree>` instead. This is correctness, not just fewer permission prompts: a bare `git` resolves to the repo root, which may be the MAIN checkout rather than your worktree (see §1).
 
 ## What you do NOT do
 

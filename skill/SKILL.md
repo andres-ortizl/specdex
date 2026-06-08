@@ -403,6 +403,10 @@ Create a team with two teammates, both with `mode: "bypassPermissions"` so they 
 - **coder** — uses the `dex-coder` agent definition. Implements the approved plan. Mode: `bypassPermissions`. Spawn prompt must include: `export DEX_ACTOR=coder` (alongside `DEX_SPEC`).
 - **reviewer** — uses the `dex-reviewer` agent definition. Reviews the coder's work. Mode: `bypassPermissions`. Spawn prompt must include: `export DEX_ACTOR=reviewer` (alongside `DEX_SPEC`).
 
+**MANDATORY — pin the worktree in BOTH spawn prompts.** Spawned teammates inherit cwd = the repo root (the MAIN checkout), not your worktree, so a relative-path edit silently lands on `main` instead of the branch. Every spawn prompt MUST carry the absolute worktree path and this rule:
+
+> "Your worktree is `<absolute-worktree-path>`. It is the ONLY valid root: pass it explicitly to every file and git operation (`git -C <absolute-worktree-path> …`), never rely on cwd, never edit by relative path — sub-agents resolve relative paths to the repo root, which is the MAIN checkout, not this worktree. Before you start and again before you report, run `git -C <absolute-worktree-path> status` and confirm the MAIN checkout is clean."
+
 > **Communication model — two planes.** Both teammates have `SendMessage`, so messaging is bidirectional and peer-to-peer (full mesh).
 > - **SendMessage = delivery plane** (one-to-one, needs a live recipient). Use it to cut roundtrips: coder/reviewer report to you directly, and the reviewer messages the coder its findings directly (no lead relay). This is the fast lane.
 > - **Event log = visibility plane** (one-to-many, async, durable). **Every consequential message MUST also record a matching event via `dex`** (see the Event emission section). This is the rule that keeps cutting the lead out of relays from making the lead — and your Slack scoreboard, the fleet view, the audit trail — blind. Fast lane + the record.
