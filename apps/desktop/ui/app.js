@@ -606,10 +606,29 @@ function sampleTeamPanes(project, name) {
   return {
     socket_name: "claude-swarm-12345",
     panes: [
-      { title: "dex-coder", text: "→ Implementing attach_argv...\n  RED: terminal tests\n  Writing tmux new-session -A ...\n  cargo test\n" },
+      { title: "dex-coder", text: "→ Implementing attach_argv...\n  RED: terminal tests\n\n  5  fn attach(session: &str) {\n  6 -    tmux_new(session)\n  6 +    tmux_new_or_attach(session)\n  7  }\n\n  cargo test → 42 passed\n" },
       { title: "dex-reviewer", text: "Waiting for coder report...\n" },
     ],
   };
+}
+
+// Light diff tinting for the live pane. The capture is plain (no ANSI), so
+// classify by sign: Claude's diff rows read like "  6 -import x" / " 12 +import y"
+// (a line number, then +/-). Tint those; leave everything else plain. Built with
+// text nodes so captured terminal text can never inject markup.
+function paintPaneText(pre, text) {
+  const lines = String(text).split("\n");
+  lines.forEach((line, i) => {
+    if (i > 0) pre.appendChild(document.createTextNode("\n"));
+    const m = line.match(/^\s*\d*\s?([+-])(?![+-])/);
+    if (m) {
+      const span = el("span", m[1] === "+" ? "ln-add" : "ln-del");
+      span.textContent = line;
+      pre.appendChild(span);
+    } else {
+      pre.appendChild(document.createTextNode(line));
+    }
+  });
 }
 
 function renderTeamPanes(result) {
@@ -640,7 +659,7 @@ function renderTeamPanes(result) {
     const pane = el("div", "team-pane");
     pane.appendChild(el("span", "team-pane-label", title));
     const pre = el("pre", "team-pane-text");
-    pre.textContent = text;
+    paintPaneText(pre, text);
     pane.appendChild(pre);
     wrap.appendChild(pane);
   });
