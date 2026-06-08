@@ -127,16 +127,48 @@ pub fn project_config(project: &str) -> Result<Option<Effective>> {
     Ok(None)
 }
 
-/// Read every spec's snapshot across the whole registry.
+/// Read every live (non-archived) spec snapshot across the whole registry.
 pub fn load_all() -> Result<Vec<SpecState>> {
+    Ok(collect_specs()?
+        .into_iter()
+        .filter(|(_, archived)| !archived)
+        .map(|(s, _)| s)
+        .collect())
+}
+
+/// Read every archived spec snapshot — the registry's hidden shelf.
+pub fn load_archived() -> Result<Vec<SpecState>> {
+    Ok(collect_specs()?
+        .into_iter()
+        .filter(|(_, archived)| *archived)
+        .map(|(s, _)| s)
+        .collect())
+}
+
+/// Archive (hide from the fleet) or restore a spec by toggling its marker file.
+pub fn set_archived(project: &str, name: &str, archived: bool) -> Result<()> {
+    let dir = paths::spec_dir(project, name)?;
+    if !dir.is_dir() {
+        anyhow::bail!("no spec at {project}/{name}");
+    }
+    let marker = paths::archived_path(project, name)?;
+    if archived {
+        fs::write(&marker, b"")?;
+    } else if marker.exists() {
+        fs::remove_file(&marker)?;
+    }
+    Ok(())
+}
+
+fn collect_specs() -> Result<Vec<(SpecState, bool)>> {
     let root = paths::spec_root()?;
     if !root.exists() {
         return Ok(Vec::new());
     }
-    load_all_from(&root)
+    collect_specs_from(&root)
 }
 
-fn load_all_from(root: &std::path::Path) -> Result<Vec<SpecState>> {
+fn collect_specs_from(root: &std::path::Path) -> Result<Vec<(SpecState, bool)>> {
     let mut out = Vec::new();
     for project in fs::read_dir(root)?.flatten() {
         if project.file_name().to_string_lossy().starts_with('.') {
@@ -146,10 +178,11 @@ fn load_all_from(root: &std::path::Path) -> Result<Vec<SpecState>> {
             continue;
         }
         for spec in fs::read_dir(project.path())?.flatten() {
-            let sp = spec.path().join("state.json");
-            if let Ok(txt) = fs::read_to_string(&sp) {
+            let dir = spec.path();
+            if let Ok(txt) = fs::read_to_string(dir.join("state.json")) {
                 if let Ok(state) = serde_json::from_str::<SpecState>(&txt) {
-                    out.push(state);
+                    let archived = dir.join(paths::ARCHIVED_MARKER).exists();
+                    out.push((state, archived));
                 }
             }
         }
@@ -177,9 +210,33 @@ mod tests {
         let dot_state = SpecState::new("fake-dot-project".into(), "fake-spec".into(), now);
         std::fs::write(real_spec.join("state.json"), serde_json::to_string(&state).unwrap()).unwrap();
         std::fs::write(dot_spec.join("state.json"), serde_json::to_string(&dot_state).unwrap()).unwrap();
-        let states = load_all_from(&root).unwrap();
+        let collected = collect_specs_from(&root).unwrap();
+        let states: Vec<_> = collected.iter().filter(|(_, a)| !a).collect();
         assert_eq!(states.len(), 1, "dot-dir must not produce phantom fleet entries");
-        assert_eq!(states[0].project, "real-project");
+        assert_eq!(states[0].0.project, "real-project");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn archived_marker_splits_live_from_archived() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("specdex_archive_{nanos}"));
+        let now = chrono::Utc::now();
+        for name in ["live-spec", "shelved-spec"] {
+            let dir = root.join("proj").join(name);
+            std::fs::create_dir_all(&dir).unwrap();
+            let state = SpecState::new("proj".into(), name.into(), now);
+            std::fs::write(dir.join("state.json"), serde_json::to_string(&state).unwrap()).unwrap();
+        }
+        std::fs::write(root.join("proj").join("shelved-spec").join(paths::ARCHIVED_MARKER), b"").unwrap();
+        let collected = collect_specs_from(&root).unwrap();
+        let live: Vec<_> = collected.iter().filter(|(_, a)| !a).map(|(s, _)| s.name.as_str()).collect();
+        let archived: Vec<_> = collected.iter().filter(|(_, a)| *a).map(|(s, _)| s.name.as_str()).collect();
+        assert_eq!(live, vec!["live-spec"]);
+        assert_eq!(archived, vec!["shelved-spec"]);
         let _ = std::fs::remove_dir_all(&root);
     }
 

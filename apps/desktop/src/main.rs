@@ -6,9 +6,9 @@ use std::time::Duration;
 use notify::{RecursiveMode, Watcher};
 use specdex_core::{
     attach_argv, config_view, find_swarm_socket, fleet_snapshot, list_curator_reports,
-    load_all, load_all_notes, load_curator_report, load_logbook, load_spec_doc, load_state,
-    paths, project_config as core_project_config, project_config_raw, read_events,
-    read_team_panes, watch_team_argv, AggregatedNote, CuratorReport, FleetRow,
+    load_all, load_all_notes, load_archived, load_curator_report, load_logbook, load_spec_doc,
+    load_state, paths, project_config as core_project_config, project_config_raw, read_events,
+    read_team_panes, set_archived, watch_team_argv, AggregatedNote, CuratorReport, FleetRow,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -25,6 +25,28 @@ fn snapshot() -> Vec<FleetRow> {
 #[tauri::command]
 fn fleet() -> Vec<FleetRow> {
     snapshot()
+}
+
+/// Archived specs as fleet rows — the registry's hidden shelf.
+#[tauri::command]
+fn archived_specs() -> Vec<FleetRow> {
+    match load_archived() {
+        Ok(specs) => fleet_snapshot(specs, chrono::Utc::now(), STALE_SECS),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Hide a spec from the fleet (and the file-watch polling). The registry watcher
+/// re-emits the fleet snapshot once the marker lands.
+#[tauri::command]
+fn archive_spec(project: String, name: String) -> Result<(), String> {
+    set_archived(&project, &name, true).map_err(|e| e.to_string())
+}
+
+/// Restore an archived spec to the live fleet.
+#[tauri::command]
+fn unarchive_spec(project: String, name: String) -> Result<(), String> {
+    set_archived(&project, &name, false).map_err(|e| e.to_string())
 }
 
 /// Aggregated notes across the whole registry — the curator's signals plane.
@@ -149,7 +171,7 @@ fn emit_signals(handle: &AppHandle) {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![fleet, signals, curator_reports, read_curator_report, spec_detail, project_config, attach_terminal, team_panes, watch_team])
+        .invoke_handler(tauri::generate_handler![fleet, archived_specs, archive_spec, unarchive_spec, signals, curator_reports, read_curator_report, spec_detail, project_config, attach_terminal, team_panes, watch_team])
         .setup(|app| {
             let handle = app.handle().clone();
             // Watch the registry off-thread; push a fresh snapshot to the webview on change.

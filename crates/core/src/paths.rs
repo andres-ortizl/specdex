@@ -25,6 +25,13 @@ pub fn state_path(project: &str, name: &str) -> Result<PathBuf> {
     Ok(spec_dir(project, name)?.join("state.json"))
 }
 
+/// Marker file that hides a spec from the fleet (and the file-watch polling).
+pub const ARCHIVED_MARKER: &str = "archived";
+
+pub fn archived_path(project: &str, name: &str) -> Result<PathBuf> {
+    Ok(spec_dir(project, name)?.join(ARCHIVED_MARKER))
+}
+
 pub fn spec_doc_path(project: &str, name: &str) -> Result<PathBuf> {
     Ok(spec_dir(project, name)?.join("spec.md"))
 }
