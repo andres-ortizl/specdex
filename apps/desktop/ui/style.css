@@ -154,7 +154,7 @@ h1, h2 { margin: 0; }
 }
 .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
-.brand-mark {                         /* hexagon spec-node mark in ember */
+.brand-mark {                         /* agent-graph mark: ember hub + agent nodes */
   display: inline-flex;
   width: 20px; height: 20px;
   margin-right: 2px;
@@ -162,7 +162,8 @@ h1, h2 { margin: 0; }
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--ember) 32%, transparent));
 }
 .brand-mark svg { width: 100%; height: 100%; display: block; }
-.brand-mark .bm-hex { opacity: .9; }
+.brand-mark .bm-spoke { opacity: .42; }
+.brand-mark .bm-node { opacity: .8; }
 .brand:hover .brand-mark { color: color-mix(in srgb, var(--ember) 88%, #fff); }
 
 .brand-name {
