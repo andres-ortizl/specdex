@@ -65,7 +65,11 @@ pub fn serialize_lesson(lesson: &Lesson) -> String {
 }
 
 pub fn load_lessons(project: &str) -> Result<Vec<Lesson>> {
-    let dir = crate::paths::lessons_dir(project)?;
+    load_lessons_from(&crate::paths::spec_root()?, project)
+}
+
+fn load_lessons_from(root: &std::path::Path, project: &str) -> Result<Vec<Lesson>> {
+    let dir = root.join(project).join("lessons");
     if !dir.exists() {
         return Ok(Vec::new());
     }
@@ -92,23 +96,31 @@ pub fn load_lessons(project: &str) -> Result<Vec<Lesson>> {
 }
 
 pub fn load_lesson(project: &str, id: &str) -> Result<Lesson> {
+    load_lesson_from(&crate::paths::spec_root()?, project, id)
+}
+
+fn load_lesson_from(root: &std::path::Path, project: &str, id: &str) -> Result<Lesson> {
     if !valid_lesson_id(id) {
         return Err(anyhow!("invalid lesson id: {id:?}"));
     }
-    let path = crate::paths::lesson_path(project, id)?;
+    let path = root.join(project).join("lessons").join(format!("{id}.md"));
     let raw = fs::read_to_string(&path)
         .with_context(|| format!("reading lesson {id:?} at {}", path.display()))?;
     parse_lesson(id, &raw)
 }
 
 pub fn save_lesson(project: &str, lesson: &Lesson) -> Result<()> {
+    save_lesson_to(&crate::paths::spec_root()?, project, lesson)
+}
+
+fn save_lesson_to(root: &std::path::Path, project: &str, lesson: &Lesson) -> Result<()> {
     if !valid_lesson_id(&lesson.id) {
         return Err(anyhow!("invalid lesson id: {:?}", lesson.id));
     }
-    let dir = crate::paths::lessons_dir(project)?;
+    let dir = root.join(project).join("lessons");
     fs::create_dir_all(&dir)
         .with_context(|| format!("creating lessons dir {}", dir.display()))?;
-    let path = crate::paths::lesson_path(project, &lesson.id)?;
+    let path = dir.join(format!("{}.md", lesson.id));
     let content = serialize_lesson(lesson);
     fs::write(&path, content)
         .with_context(|| format!("writing lesson {:?}", lesson.id))?;
@@ -140,17 +152,21 @@ mod tests {
         }
     }
 
-    #[test]
-    fn roundtrip_save_load() {
+    fn temp_root() -> std::path::PathBuf {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let project = format!("test_roundtrip_{nanos}");
+        std::env::temp_dir().join(format!("specdex_lessons_{nanos}"))
+    }
+
+    #[test]
+    fn roundtrip_save_load() {
+        let root = temp_root();
         let original = make_lesson("migrate-first");
 
-        save_lesson(&project, &original).unwrap();
-        let loaded = load_lesson(&project, "migrate-first").unwrap();
+        save_lesson_to(&root, "p", &original).unwrap();
+        let loaded = load_lesson_from(&root, "p", "migrate-first").unwrap();
 
         assert_eq!(loaded.id, original.id);
         assert_eq!(loaded.scope, original.scope);
@@ -165,7 +181,7 @@ mod tests {
         assert_eq!(loaded.last_validated_at, original.last_validated_at);
         assert_eq!(loaded.insight, original.insight);
 
-        let _ = fs::remove_dir_all(crate::paths::spec_root().unwrap().join(&project));
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -192,13 +208,8 @@ mod tests {
 
     #[test]
     fn load_lessons_newest_first_skips_junk() {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let project = format!("test_proj_{nanos}");
-
-        let dir = crate::paths::lessons_dir(&project).unwrap();
+        let root = temp_root();
+        let dir = root.join("p").join("lessons");
         fs::create_dir_all(&dir).unwrap();
 
         let older_time = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
@@ -215,11 +226,11 @@ mod tests {
         fs::write(dir.join("newer-lesson.md"), serialize_lesson(&newer)).unwrap();
         fs::write(dir.join("junk.md"), "this is not valid frontmatter").unwrap();
 
-        let lessons = load_lessons(&project).unwrap();
+        let lessons = load_lessons_from(&root, "p").unwrap();
         assert_eq!(lessons.len(), 2, "junk file should be skipped");
         assert_eq!(lessons[0].id, "newer-lesson", "newest first");
         assert_eq!(lessons[1].id, "older-lesson");
 
-        let _ = fs::remove_dir_all(crate::paths::spec_root().unwrap().join(&project));
+        let _ = fs::remove_dir_all(&root);
     }
 }
