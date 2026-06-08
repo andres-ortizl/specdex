@@ -163,8 +163,8 @@ h1, h2 { margin: 0; }
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--ember) 32%, transparent));
 }
 .brand-mark svg { width: 100%; height: 100%; display: block; }
-.brand-mark .bm-spoke { opacity: .42; }
-.brand-mark .bm-node { opacity: .8; }
+.brand-mark .bm-spoke { opacity: .5; }
+.brand-mark .bm-node { opacity: .92; }
 .brand:hover .brand-mark { color: color-mix(in srgb, var(--ember) 88%, #fff); }
 
 .brand-name {
