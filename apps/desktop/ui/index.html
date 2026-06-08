@@ -45,34 +45,6 @@
     </nav>
 
     <div class="topbar-right">
-      <div id="fleet-controls">
-        <div class="fleet-sort" id="layout-toggle" role="group" aria-label="Layout">
-          <button type="button" data-layout="cards" aria-pressed="false">
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
-            Cards
-          </button>
-          <button type="button" data-layout="list" aria-pressed="false">
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" stroke-linecap="round"/></svg>
-            List
-          </button>
-        </div>
-        <div class="fleet-sort" id="fleet-sort" role="group" aria-label="Sort specs">
-          <button type="button" data-sort="recent">Recent</button>
-          <button type="button" data-sort="state">State</button>
-          <button type="button" data-sort="name">Name</button>
-        </div>
-        <span class="fleet-count" id="fleet-count"></span>
-        <span class="topbar-sep" aria-hidden="true"></span>
-      </div>
-      <div id="signals-controls" hidden>
-        <div class="fleet-sort" id="signals-scope" role="group" aria-label="Scope filter">
-          <button type="button" data-scope="all" aria-pressed="true">All</button>
-          <button type="button" data-scope="spec" aria-pressed="false">Spec</button>
-          <button type="button" data-scope="project" aria-pressed="false">Project</button>
-          <button type="button" data-scope="skill" aria-pressed="false">Skill</button>
-        </div>
-        <span class="topbar-sep" aria-hidden="true"></span>
-      </div>
       <button class="theme-toggle" id="theme-toggle" type="button"
               data-state="system" aria-label="Theme: system" title="Theme: system">
         <span class="t-track" aria-hidden="true"><span class="t-knob" id="t-knob"></span></span>
@@ -83,18 +55,33 @@
   <div class="shell">
     <aside class="sidebar" id="sidebar" aria-label="Projects"></aside>
     <div class="content">
-      <div class="legend" id="legend" aria-label="Health legend">
-        <span class="legend-title">health</span>
-        <span class="legend-item"><span class="dot" data-health="alive"></span>working</span>
-        <span class="legend-item"><span class="dot" data-health="idle"></span>idle</span>
-        <span class="legend-item"><span class="dot" data-health="stale"></span>stale</span>
-        <span class="legend-item"><span class="dot" data-health="needs-you"></span>needs&nbsp;you</span>
-        <span class="legend-item"><span class="dot" data-health="done"></span>done</span>
-        <span class="topbar-sep" aria-hidden="true"></span>
-        <span class="legend-title">rail</span>
-        <span class="legend-item"><span class="rail-node done legend-swatch"></span>done</span>
-        <span class="legend-item"><span class="rail-node current legend-swatch"></span>current</span>
-        <span class="legend-item"><span class="rail-node legend-swatch"></span>upcoming</span>
+      <div class="toolbar" id="toolbar" aria-label="Fleet controls">
+        <div id="fleet-controls">
+          <div class="fleet-sort" id="layout-toggle" role="group" aria-label="Layout">
+            <button type="button" data-layout="cards" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+              Cards
+            </button>
+            <button type="button" data-layout="list" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" stroke-linecap="round"/></svg>
+              List
+            </button>
+          </div>
+          <div class="fleet-sort" id="fleet-sort" role="group" aria-label="Sort specs">
+            <button type="button" data-sort="recent">Recent</button>
+            <button type="button" data-sort="state">State</button>
+            <button type="button" data-sort="name">Name</button>
+          </div>
+          <span class="fleet-count" id="fleet-count"></span>
+        </div>
+        <div id="signals-controls" hidden>
+          <div class="fleet-sort" id="signals-scope" role="group" aria-label="Scope filter">
+            <button type="button" data-scope="all" aria-pressed="true">All</button>
+            <button type="button" data-scope="spec" aria-pressed="false">Spec</button>
+            <button type="button" data-scope="project" aria-pressed="false">Project</button>
+            <button type="button" data-scope="skill" aria-pressed="false">Skill</button>
+          </div>
+        </div>
       </div>
       <main class="fleet" id="fleet" aria-label="Running specs"></main>
       <section class="listwrap" id="listwrap" aria-label="Running specs" hidden>

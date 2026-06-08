@@ -337,16 +337,25 @@ function renderRail(currentPhase, opts) {
     if (i < cur) cls += " done";
     else if (i === cur) cls += " current";
     const node = el("span", cls);
-    node.title = phase;
+    node.title = phase + " — " + (i < cur ? "done" : i === cur ? "current" : "upcoming");
     rail.appendChild(node);
   });
   return rail;
 }
 
+// Tooltip wording for the status dot — what the standing legend used to spell out.
+const HEALTH_LABEL = {
+  alive: "working",
+  idle: "idle",
+  stale: "stale — no heartbeat",
+  "needs-you": "needs you — blocked",
+  done: "done",
+};
+
 function healthDot(health) {
   const d = el("span", "dot");
   d.dataset.health = health;
-  d.title = health;
+  d.title = HEALTH_LABEL[health] || health;
   return d;
 }
 
@@ -1633,14 +1642,14 @@ function showView(view) {
   const onFleet = view === "fleet";
   const onSignals = view === "signals";
   const onCurator = view === "curator";
-  const legend = document.getElementById("legend");
+  const toolbar = document.getElementById("toolbar");
   const controls = document.getElementById("fleet-controls");
   const sigControls = document.getElementById("signals-controls");
   const listwrap = document.getElementById("listwrap");
   const signalsEl = document.getElementById("signals");
   const curatorEl = document.getElementById("curator");
 
-  if (legend) legend.hidden = !onFleet;
+  if (toolbar) toolbar.hidden = !(onFleet || onSignals);
   if (controls) controls.hidden = !onFleet;
   if (sigControls) sigControls.hidden = !onSignals;
   document.getElementById("detail").hidden = view !== "detail";
