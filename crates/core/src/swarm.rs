@@ -192,8 +192,10 @@ fn match_panes_for_session(socket_name: &str, session_id: &str) -> Option<Vec<(S
 }
 
 fn capture_pane(socket_name: &str, pane_id: &str) -> Option<String> {
+    // -e keeps the ANSI escape sequences so the UI can recolor the live pane
+    // (Catppuccin palette). Without it, capture-pane strips all color.
     let out = Command::new("tmux")
-        .args(["-L", socket_name, "capture-pane", "-p", "-t", pane_id])
+        .args(["-L", socket_name, "capture-pane", "-e", "-p", "-t", pane_id])
         .output()
         .ok()?;
     if out.status.success() {

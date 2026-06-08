@@ -102,6 +102,19 @@
    .detail=flex) so showView() can actually hide a pane. */
 [hidden] { display: none !important; }
 
+/* DRAMS scrollbars — soft hardware: thin, no track, a quiet pill thumb that
+   darkens on hover. Applied app-wide; reuses --rule/--ink-faint so it adapts
+   light↔dark with no new token. */
+* { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--rule); border: 2px solid transparent;
+  border-radius: var(--r-pill); background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); background-clip: padding-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
+
 html, body { height: 100%; }
 
 body {
@@ -1432,12 +1445,29 @@ h1, h2 { margin: 0; }
   font-family: var(--font-mono);
 }
 
+/* Zen terminal palette — the 16 ANSI colors re-toned into the drams system.
+   Green/gold/blue/grays reuse the app's own semantic tokens (so they adapt
+   light↔dark for free); only brick/mauve/teal need their own muted values.
+   The parser washes ANSI backgrounds instead of filling, so nothing clashes
+   with the calm paper. 256/truecolor are hue-snapped to these by the parser. */
+:root {
+  --term-0: var(--ink-faint);  --term-1:#b3524f;  --term-2: var(--alive);  --term-3: var(--stale);
+  --term-4: var(--accent);     --term-5:#9a6a9a;  --term-6:#4f8f8a;        --term-7: var(--ink);
+  --term-8: var(--ink-muted);  --term-9:#b3524f;  --term-10: var(--alive); --term-11: var(--stale);
+  --term-12: var(--accent);    --term-13:#9a6a9a; --term-14:#4f8f8a;       --term-15: var(--ink);
+}
+:root[data-theme="dark"] {
+  --term-1:#d98a86; --term-9:#d98a86;
+  --term-5:#c79ac7; --term-13:#c79ac7;
+  --term-6:#7fc0ba; --term-14:#7fc0ba;
+}
+
 .team-pane-text {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.5;
-  color: var(--ink);
+  color: var(--ink-muted);
   white-space: pre;
   background: var(--sunk);
   border: 1px solid var(--rule-soft);
@@ -1447,9 +1477,78 @@ h1, h2 { margin: 0; }
   max-height: 200px;
   overflow: auto;
 }
-/* live diff tint — signed lines pick up the theme's green/warm, both modes */
-.team-pane-text .ln-add { color: var(--alive); }
-.team-pane-text .ln-del { color: var(--ember); }
+
+/* the "live team" label in detail opens the dedicated screen */
+.team-open {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: inherit;
+}
+.team-open .team-panes-head { transition: color var(--dur-fast) var(--ease); }
+.team-open:hover .team-panes-head { color: var(--accent); }
+.team-open-exp { font-size: 11px; color: var(--ink-faint); transition: color var(--dur-fast) var(--ease); }
+.team-open:hover .team-open-exp { color: var(--accent); }
+.team-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+/* ============================ live-team screen (L-C) ============================ */
+/* Full-height dedicated view: a switcher + one big zen terminal that scrolls. */
+.liveteam-view { display: flex; flex-direction: column; height: calc(100vh - 57px); }
+.lt { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.lt-head {
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  padding: var(--s-4) var(--s-5) var(--s-3);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.lt-sep { color: var(--rule); }
+.lt-title { display: flex; align-items: baseline; gap: 7px; font-size: 18px; letter-spacing: -0.03em; }
+.lt-title .pj { color: var(--ink-muted); font-weight: 400; font-family: var(--font-mono); font-size: 14px; }
+.lt-title .sl { color: var(--ink-faint); font-weight: 400; }
+.lt-title .nm { color: var(--ink); font-weight: 540; }
+
+.lt-focus { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.lt-switch-row { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-5) var(--s-2); }
+.lt-switch {
+  display: inline-flex; gap: 2px; padding: 2px;
+  background: var(--sunk); border: 1px solid var(--rule-soft); border-radius: var(--r-pill);
+}
+.lt-switch button {
+  appearance: none; border: none; background: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; font-family: var(--font-mono); font-size: 12px; font-weight: 450;
+  letter-spacing: -0.01em; color: var(--ink-muted); border-radius: var(--r-pill);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.lt-switch button:hover { color: var(--ink); }
+.lt-switch button[aria-pressed="true"] { color: var(--ink); background: var(--surface); box-shadow: var(--lift-1); }
+.lt-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lt-switch .pip {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--alive) 38%, #fff), var(--alive));
+  box-shadow: 0 0 4px color-mix(in srgb, var(--alive) 55%, transparent);
+}
+
+.term-col { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; padding: 0 var(--s-5) var(--s-5); }
+.lt-term {
+  margin: 0; flex: 1 1 auto; min-height: 0;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
+  color: var(--ink-muted); white-space: pre;
+  background: var(--sunk); border: 1px solid var(--rule-soft);
+  border-radius: var(--r-chip); box-shadow: var(--press);
+  padding: var(--s-3) var(--s-4); overflow: auto;
+}
+
+/* the screen's own watch button — a quiet raised push-button (external terminal) */
+.watch-btn {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted);
+  background: var(--surface); border: none; box-shadow: var(--lift-1);
+  border-radius: var(--r-chip); padding: 4px 9px; cursor: pointer;
+  transition: box-shadow var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.watch-btn svg { width: 13px; height: 13px; }
+.watch-btn:hover { color: var(--ink); box-shadow: var(--lift); transform: translateY(-1px); }
+.watch-btn:active { box-shadow: var(--press); transform: translateY(1px); }
+.watch-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ============================ topbar nav ============================ */
 

@@ -606,29 +606,106 @@ function sampleTeamPanes(project, name) {
   return {
     socket_name: "claude-swarm-12345",
     panes: [
-      { title: "dex-coder", text: "→ Implementing attach_argv...\n  RED: terminal tests\n\n  5  fn attach(session: &str) {\n  6 -    tmux_new(session)\n  6 +    tmux_new_or_attach(session)\n  7  }\n\n  cargo test → 42 passed\n" },
-      { title: "dex-reviewer", text: "Waiting for coder report...\n" },
+      { title: "dex-coder", text: "\x1b[34m→ Implementing attach_argv\x1b[0m\n  \x1b[2mRED: terminal tests\x1b[0m\n\n   5  fn attach(session: &str) {\n   6 \x1b[41;97m-    tmux_new(session)\x1b[0m\n   6 \x1b[32m+    tmux_new_or_attach(session)\x1b[0m\n   7  }\n\n  \x1b[1;32mcargo test\x1b[0m → \x1b[32m42 passed\x1b[0m\n" },
+      { title: "dex-reviewer", text: "\x1b[2mWaiting for coder report\x1b[0m\n" },
     ],
   };
 }
 
-// Light diff tinting for the live pane. The capture is plain (no ANSI), so
-// classify by sign: Claude's diff rows read like "  6 -import x" / " 12 +import y"
-// (a line number, then +/-). Tint those; leave everything else plain. Built with
-// text nodes so captured terminal text can never inject markup.
+// The 16 ANSI slots map to the zen terminal vars (which reuse the app's tokens).
+const termVar = (i) => "var(--term-" + i + ")";
+
+// Snap an arbitrary RGB to the nearest zen token by hue, so 256-color and
+// truecolor escapes stay inside the palette instead of clashing with the paper.
+function zenColor(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max - min < 24) return l < 80 ? termVar(0) : l < 170 ? "var(--ink-muted)" : termVar(7);
+  const d = max - min;
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  if (h < 30 || h >= 330) return termVar(1);   // red
+  if (h < 90)  return termVar(3);               // orange/yellow → gold
+  if (h < 170) return termVar(2);               // green
+  if (h < 200) return termVar(6);               // cyan
+  if (h < 260) return termVar(4);               // blue
+  return termVar(5);                            // magenta
+}
+
+// 256-color → a zen color. 0-15 reuse the palette vars; 16-255 are hue-snapped.
+function term256(n) {
+  if (n < 16) return termVar(n);
+  let r, g, b;
+  if (n >= 232) { r = g = b = 8 + (n - 232) * 10; }
+  else { const c = n - 16, L = (k) => (k ? 55 + k * 40 : 0); r = L(Math.floor(c / 36)); g = L(Math.floor((c % 36) / 6)); b = L(c % 6); }
+  return zenColor(r, g, b);
+}
+
+// Minimal ANSI renderer for the live pane: re-tones SGR color into the zen
+// palette and washes backgrounds/inverse (a faint tint, never a saturated fill,
+// so it stays calm on the paper). Honors bold/dim/italic/underline; consumes and
+// drops cursor moves, OSC, and other escapes (captured terminal output is never
+// trusted as markup — spans get textContent).
 function paintPaneText(pre, text) {
-  const lines = String(text).split("\n");
-  lines.forEach((line, i) => {
-    if (i > 0) pre.appendChild(document.createTextNode("\n"));
-    const m = line.match(/^\s*\d*\s?([+-])(?![+-])/);
-    if (m) {
-      const span = el("span", m[1] === "+" ? "ln-add" : "ln-del");
-      span.textContent = line;
-      pre.appendChild(span);
-    } else {
-      pre.appendChild(document.createTextNode(line));
+  const s = String(text);
+  let fg = null, bg = null, bold = false, dim = false, italic = false, underline = false, inverse = false;
+  let buf = "";
+
+  const flush = () => {
+    if (!buf) return;
+    const st = [];
+    let f = fg;
+    const wash = inverse ? (fg || termVar(7)) : bg;
+    if (wash) { st.push("background:color-mix(in srgb," + wash + " 14%,transparent)"); f = "var(--ink)"; }
+    if (f) st.push("color:" + f);
+    if (bold) st.push("font-weight:600");
+    if (dim) st.push("opacity:.65");
+    if (italic) st.push("font-style:italic");
+    if (underline) st.push("text-decoration:underline");
+    if (st.length) { const n = el("span"); n.setAttribute("style", st.join(";")); n.textContent = buf; pre.appendChild(n); }
+    else pre.appendChild(document.createTextNode(buf));
+    buf = "";
+  };
+
+  const sgr = (params) => {
+    const c = params.length ? params.split(";").map(Number) : [0];
+    for (let k = 0; k < c.length; k++) {
+      const v = c[k];
+      if (v === 0) { fg = bg = null; bold = dim = italic = underline = inverse = false; }
+      else if (v === 1) bold = true; else if (v === 2) dim = true;
+      else if (v === 3) italic = true; else if (v === 4) underline = true;
+      else if (v === 7) inverse = true;
+      else if (v === 22) bold = dim = false; else if (v === 23) italic = false;
+      else if (v === 24) underline = false; else if (v === 27) inverse = false;
+      else if (v >= 30 && v <= 37) fg = termVar(v - 30);
+      else if (v === 38) { if (c[k+1] === 5) { fg = term256(c[k+2]); k += 2; } else if (c[k+1] === 2) { fg = zenColor(c[k+2], c[k+3], c[k+4]); k += 4; } }
+      else if (v === 39) fg = null;
+      else if (v >= 40 && v <= 47) bg = termVar(v - 40);
+      else if (v === 48) { if (c[k+1] === 5) { bg = term256(c[k+2]); k += 2; } else if (c[k+1] === 2) { bg = zenColor(c[k+2], c[k+3], c[k+4]); k += 4; } }
+      else if (v === 49) bg = null;
+      else if (v >= 90 && v <= 97) fg = termVar(v - 90 + 8);
+      else if (v >= 100 && v <= 107) bg = termVar(v - 100 + 8);
     }
-  });
+  };
+
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] === "\x1b") {
+      if (s[i + 1] === "[") {                       // CSI ESC[…<final 0x40-0x7E>
+        let j = i + 2;
+        while (j < s.length && !(s[j] >= "@" && s[j] <= "~")) j++;
+        if (s[j] === "m") { flush(); sgr(s.slice(i + 2, j)); }   // SGR only; drop the rest
+        i = j + 1; continue;
+      }
+      if (s[i + 1] === "]") {                        // OSC ESC]…(BEL | ESC\)
+        let j = i + 2;
+        while (j < s.length && s[j] !== "\x07" && !(s[j] === "\x1b" && s[j + 1] === "\\")) j++;
+        i = s[j] === "\x07" ? j + 1 : j + 2; continue;
+      }
+      i += 2; continue;                              // other ESC X — skip
+    }
+    buf += s[i]; i++;
+  }
+  flush();
 }
 
 function renderTeamPanes(result) {
@@ -636,7 +713,15 @@ function renderTeamPanes(result) {
   const wrap = el("div", "d-team-panes");
   if (panes.length === 0) return wrap; // empty; CSS hides via :empty
   const headRow = el("div", "team-panes-head-row");
-  headRow.appendChild(el("span", "team-panes-head", "live team"));
+  // The "live team" label opens the dedicated full-screen view for this spec.
+  const open = el("button", "team-open");
+  open.type = "button";
+  open.appendChild(el("span", "team-panes-head", "live team"));
+  open.appendChild(el("span", "team-open-exp", "↗"));
+  open.addEventListener("click", () => {
+    if (CURRENT_DETAIL) navigate({ view: "liveteam", project: CURRENT_DETAIL.state.project, name: CURRENT_DETAIL.state.name });
+  });
+  headRow.appendChild(open);
   // Watch team button: opens a read-only terminal view of the live swarm session.
   if (result && result.socket_name) {
     const watchBtn = el("button", "d-attach");
@@ -664,6 +749,95 @@ function renderTeamPanes(result) {
     wrap.appendChild(pane);
   });
   return wrap;
+}
+
+// ============================ live-team screen (L-C: focused + switcher) ============================
+
+let LIVETEAM = null; // { project, name, agent } — the dedicated full-screen view
+
+function renderLiveTeam(project, name) {
+  const root = document.getElementById("liveteam");
+  root.textContent = "";
+  LIVETEAM = { project, name, agent: null };
+
+  const screen = el("div", "lt");
+  const head = el("div", "lt-head");
+  const back = el("button", "d-back");
+  back.type = "button";
+  back.innerHTML = ICONS.back;
+  back.appendChild(document.createTextNode("spec"));
+  back.addEventListener("click", () => navigate({ view: "detail", project, name }));
+  head.appendChild(back);
+  head.appendChild(el("span", "lt-sep", "·"));
+  const title = el("span", "lt-title");
+  title.appendChild(el("span", "pj", project));
+  title.appendChild(el("span", "sl", "/"));
+  title.appendChild(el("span", "nm", name));
+  head.appendChild(title);
+  screen.appendChild(head);
+
+  const focus = el("div", "lt-focus");
+  const row = el("div", "lt-switch-row");
+  const sw = el("div", "lt-switch");
+  sw.setAttribute("role", "group");
+  sw.setAttribute("aria-label", "Agent");
+  row.appendChild(sw);
+  const watch = el("button", "watch-btn");
+  watch.type = "button";
+  watch.innerHTML = ICONS.terminal;
+  watch.appendChild(document.createTextNode("watch"));
+  watch.addEventListener("click", () => {
+    const t = window.__TAURI__;
+    if (t && t.core) t.core.invoke("watch_team", { project, name }).catch(() => {});
+  });
+  row.appendChild(watch);
+  focus.appendChild(row);
+
+  const col = el("div", "term-col");
+  const pane = el("pre", "lt-term");
+  col.appendChild(pane);
+  focus.appendChild(col);
+  screen.appendChild(focus);
+  root.appendChild(screen);
+
+  const apply = (result) => updateLiveTeam(result, sw, pane);
+  stopTeamPoll();
+  loadTeamPanes(project, name).then(apply);
+  TEAM_POLL_TIMER = setInterval(() => {
+    if (document.getElementById("liveteam").hidden) { stopTeamPoll(); return; }
+    loadTeamPanes(project, name).then(apply);
+  }, 1500);
+}
+
+function updateLiveTeam(result, sw, pane) {
+  if (!LIVETEAM) return;
+  const panes = (result && result.panes) || [];
+  if (panes.length === 0) {
+    sw.textContent = "";
+    pane.textContent = "";
+    pane.appendChild(document.createTextNode("No live team — the swarm session isn't running."));
+    return;
+  }
+  if (!LIVETEAM.agent || !panes.some((p) => p.title === LIVETEAM.agent)) LIVETEAM.agent = panes[0].title;
+
+  sw.textContent = "";
+  panes.forEach((p) => {
+    const b = el("button");
+    b.type = "button";
+    b.dataset.agent = p.title;
+    b.setAttribute("aria-pressed", p.title === LIVETEAM.agent ? "true" : "false");
+    b.appendChild(el("span", "pip"));
+    b.appendChild(document.createTextNode(p.title));
+    b.addEventListener("click", () => { LIVETEAM.agent = p.title; updateLiveTeam(result, sw, pane); });
+    sw.appendChild(b);
+  });
+
+  const sel = panes.find((p) => p.title === LIVETEAM.agent) || panes[0];
+  const atBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 24;
+  const prevTop = pane.scrollTop;
+  pane.textContent = "";
+  paintPaneText(pane, sel.text);
+  pane.scrollTop = atBottom ? pane.scrollHeight : prevTop;
 }
 
 function updateTeamPanesPanel(result, project, name) {
@@ -1667,6 +1841,7 @@ function showView(view) {
   const listwrap = document.getElementById("listwrap");
   const signalsEl = document.getElementById("signals");
   const curatorEl = document.getElementById("curator");
+  const liveteamEl = document.getElementById("liveteam");
 
   if (toolbar) toolbar.hidden = !(onFleet || onSignals);
   if (controls) controls.hidden = !onFleet;
@@ -1674,6 +1849,7 @@ function showView(view) {
   document.getElementById("detail").hidden = view !== "detail";
   if (signalsEl) signalsEl.hidden = !onSignals;
   if (curatorEl) curatorEl.hidden = !onCurator;
+  if (liveteamEl) liveteamEl.hidden = view !== "liveteam";
 
   if (!onFleet) {
     document.getElementById("fleet").hidden = true;
@@ -1725,6 +1901,12 @@ async function navigate(route) {
     showView("curator");
     renderSidebar(LAST_FLEET);
     location.hash = "#/curator";
+  } else if (route.view === "liveteam") {
+    CURRENT_DETAIL = null;
+    renderLiveTeam(route.project, route.name);
+    showView("liveteam");
+    renderSidebar(LAST_FLEET);
+    location.hash = "#/spec/" + encodeURIComponent(route.project) + "/" + encodeURIComponent(route.name) + "/team";
   } else {
     showView("fleet");
     location.hash = "";
@@ -1737,6 +1919,8 @@ async function navigate(route) {
 function routeFromHash() {
   if (location.hash === "#/signals") { navigate({ view: "signals" }); return; }
   if (location.hash === "#/curator") { navigate({ view: "curator" }); return; }
+  const mt = location.hash.match(/^#\/spec\/([^/]+)\/([^/]+)\/team$/);
+  if (mt) { navigate({ view: "liveteam", project: decodeURIComponent(mt[1]), name: decodeURIComponent(mt[2]) }); return; }
   const m = location.hash.match(/^#\/spec\/([^/]+)\/([^/]+)$/);
   if (m) navigate({ view: "detail", project: decodeURIComponent(m[1]), name: decodeURIComponent(m[2]) });
   else showView("fleet");
