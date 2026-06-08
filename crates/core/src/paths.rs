@@ -43,3 +43,11 @@ pub fn logbook_path(project: &str, name: &str) -> Result<PathBuf> {
 pub fn source_str(project: &str, name: &str) -> String {
     format!("/spec/{project}/{name}")
 }
+
+pub fn lessons_dir(project: &str) -> Result<PathBuf> {
+    Ok(spec_root()?.join(project).join("lessons"))
+}
+
+pub fn lesson_path(project: &str, id: &str) -> Result<PathBuf> {
+    Ok(lessons_dir(project)?.join(format!("{id}.md")))
+}

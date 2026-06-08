@@ -6,9 +6,9 @@ use clap::{Parser, Subcommand};
 use include_dir::{include_dir, Dir};
 use notify::{RecursiveMode, Watcher};
 use specdex_core::{
-    emit, fleet_snapshot, get_dotted, load_all, load_effective, paths, pick_offset, schema,
-    validate, validate_score, GateProvider, GateResult, NoteLevel, Payload, Phase, PrState, Role,
-    SpecMode, Verdict,
+    emit, fleet_snapshot, get_dotted, load_all, load_effective, load_lesson, load_lessons,
+    paths, pick_offset, save_lesson, schema, validate, validate_score, Anchor, GateProvider,
+    GateResult, Lesson, NoteLevel, Payload, Phase, PrState, Role, SpecMode, Verdict,
 };
 
 static SKILL_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../skill");
@@ -131,6 +131,11 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// Manage per-project lessons (durable insights)
+    Lessons {
+        #[command(subcommand)]
+        op: LessonsOp,
+    },
     /// List every spec in the fleet with derived health
     Ls,
     /// Stream the fleet snapshot as JSON, re-emitting on every registry change
@@ -184,6 +189,42 @@ enum AgentOp {
     Idle { role: String },
 }
 
+#[derive(Subcommand)]
+enum LessonsOp {
+    /// List lessons for a project
+    List {
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        scope: Option<String>,
+        #[arg(long)]
+        state: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show a single lesson
+    Show {
+        #[arg(long)]
+        project: Option<String>,
+        id: String,
+    },
+    /// Add a new lesson
+    Add {
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        scope: String,
+        #[arg(long)]
+        trigger: String,
+        #[arg(long = "abstract")]
+        summary: String,
+        #[arg(long)]
+        insight: String,
+        #[arg(long)]
+        name: Option<String>,
+    },
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
@@ -193,6 +234,9 @@ fn main() -> Result<()> {
         Cmd::Install { ref update } => return install(*update),
         Cmd::Notes { ref scope, ref topic, ref level, json } => {
             return notes_cmd(scope.as_deref(), topic.as_deref(), level.as_deref(), json);
+        }
+        Cmd::Lessons { ref op } => {
+            return lessons_cmd(op, cli.spec.as_deref());
         }
         _ => {}
     }
@@ -414,7 +458,7 @@ fn build_payload(cmd: Cmd) -> Result<Payload> {
             let validated_scope = scope.map(|s| parse_scope(&s)).transpose()?;
             Payload::Note { level: parse_level(&level)?, topic, text, scope: validated_scope }
         }
-        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } | Cmd::Install { .. } | Cmd::Notes { .. } => {
+        Cmd::Ls | Cmd::Watch | Cmd::Config { .. } | Cmd::Ports { .. } | Cmd::Install { .. } | Cmd::Notes { .. } | Cmd::Lessons { .. } => {
             unreachable!("handled before payload build")
         }
     })
@@ -587,6 +631,138 @@ fn notes_cmd(scope: Option<&str>, topic: Option<&str>, level: Option<&str>, json
         }
     }
     Ok(())
+}
+
+fn resolve_project(project: Option<&str>, spec: Option<&str>) -> Result<String> {
+    if let Some(p) = project {
+        return Ok(p.to_string());
+    }
+    if let Some(s) = spec {
+        if let Some((p, _)) = s.split_once('/') {
+            return Ok(p.to_string());
+        }
+        return Ok(s.to_string());
+    }
+    Err(anyhow!("no project specified — pass --project or set DEX_SPEC=<project>/<name>"))
+}
+
+fn kebab_slug(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn lessons_cmd(op: &LessonsOp, spec: Option<&str>) -> Result<()> {
+    match op {
+        LessonsOp::List { project, scope, state, json } => {
+            let proj = resolve_project(project.as_deref(), spec)?;
+            let mut lessons = load_lessons(&proj)?;
+            if let Some(s) = scope {
+                lessons.retain(|l| &l.scope == s);
+            }
+            if let Some(st) = state {
+                lessons.retain(|l| &l.state == st);
+            }
+            if *json {
+                let view: Vec<_> = lessons
+                    .iter()
+                    .map(|l| {
+                        let mut v = serde_json::to_value(l).unwrap();
+                        v["id"] = serde_json::Value::String(l.id.clone());
+                        v["insight"] = serde_json::Value::String(l.insight.clone());
+                        v
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string(&view)?);
+                return Ok(());
+            }
+            if lessons.is_empty() {
+                println!("No lessons found for project {proj:?}.");
+                return Ok(());
+            }
+            println!("{:<28} {:<10} {:<10} {:<40} {}", "ID", "SCOPE", "STATE", "TRIGGER", "CREATED");
+            for l in &lessons {
+                println!(
+                    "{:<28} {:<10} {:<10} {:<40} {}",
+                    trunc(&l.id, 28),
+                    trunc(&l.scope, 10),
+                    trunc(&l.state, 10),
+                    trunc(&l.trigger, 40),
+                    l.created_at.format("%Y-%m-%d"),
+                );
+            }
+            Ok(())
+        }
+        LessonsOp::Show { project, id } => {
+            let proj = resolve_project(project.as_deref(), spec)?;
+            let lesson = load_lesson(&proj, id)?;
+            println!("id:       {}", lesson.id);
+            println!("scope:    {}", lesson.scope);
+            println!("state:    {}", lesson.state);
+            println!("trigger:  {}", lesson.trigger);
+            println!("abstract: {}", lesson.summary);
+            if !lesson.provenance.is_empty() {
+                println!("provenance: {}", lesson.provenance.join(", "));
+            }
+            println!("confidence: {}", lesson.confidence);
+            println!("created:  {}", lesson.created_at.format("%Y-%m-%dT%H:%M:%SZ"));
+            println!();
+            println!("{}", lesson.insight);
+            Ok(())
+        }
+        LessonsOp::Add { project, scope, trigger, summary, insight, name } => {
+            let proj = resolve_project(project.as_deref(), spec)?;
+            let base_id = name
+                .as_deref()
+                .map(|n| kebab_slug(n))
+                .unwrap_or_else(|| kebab_slug(summary));
+            if base_id.is_empty() {
+                return Err(anyhow!(
+                    "could not derive a lesson id from --abstract/--name; pass --name <slug>"
+                ));
+            }
+            let now = Utc::now();
+            let id = pick_lesson_id(&proj, &base_id)?;
+            let lesson = Lesson {
+                id: id.clone(),
+                scope: scope.clone(),
+                trigger: trigger.clone(),
+                summary: summary.clone(),
+                provenance: Vec::new(),
+                anchor: Anchor::default(),
+                confidence: 0.5,
+                state: "active".to_string(),
+                created_at: now,
+                last_validated_at: now,
+                insight: insight.clone(),
+            };
+            save_lesson(&proj, &lesson)?;
+            let path = specdex_core::paths::lesson_path(&proj, &id)?;
+            println!("{}", path.display());
+            Ok(())
+        }
+    }
+}
+
+fn pick_lesson_id(project: &str, base: &str) -> Result<String> {
+    let dir = specdex_core::paths::lessons_dir(project)?;
+    let candidate = |suffix: &str| -> std::path::PathBuf {
+        dir.join(format!("{base}{suffix}.md"))
+    };
+    if !candidate("").exists() {
+        return Ok(base.to_string());
+    }
+    for n in 2u32.. {
+        let suffix = format!("-{n}");
+        if !candidate(&suffix).exists() {
+            return Ok(format!("{base}{suffix}"));
+        }
+    }
+    unreachable!()
 }
 
 fn fmt_ago(t: &chrono::DateTime<chrono::Utc>) -> String {

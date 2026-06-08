@@ -1,6 +1,7 @@
 pub mod config;
 pub mod curator;
 pub mod event;
+pub mod lessons;
 pub mod notes;
 pub mod paths;
 pub mod ports;
@@ -19,6 +20,7 @@ pub use event::{
     SpecMode, Verdict,
 };
 pub use curator::{list_curator_reports, load_curator_report, CuratorReport};
+pub use lessons::{load_lesson, load_lessons, save_lesson, Anchor, Lesson};
 pub use notes::{filter_notes, group_by_topic, load_all_notes, AggregatedNote};
 pub use ports::pick_offset;
 pub use swarm::{
