@@ -13,22 +13,32 @@
         ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
         : s;
       document.documentElement.dataset.theme = t;
+      document.documentElement.dataset.sidebar =
+        localStorage.dexSidebarCollapsed === '1' ? 'collapsed' : 'open';
     })();
   </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" id="brand-home" href="#" aria-label="Back to fleet">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path class="bm-hex" d="M12 2.6 20.4 7.3v9.4L12 21.4 3.6 16.7V7.3z"
-                fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-          <circle class="bm-core" cx="12" cy="12" r="2.7" fill="currentColor"/>
-        </svg>
-      </span>
-      <h1 class="brand-name">specdex</h1>
-    </a>
+    <div class="topbar-left">
+      <a class="brand" id="brand-home" href="#" aria-label="Back to fleet">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="bm-hex" d="M12 2.6 20.4 7.3v9.4L12 21.4 3.6 16.7V7.3z"
+                  fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <circle class="bm-core" cx="12" cy="12" r="2.7" fill="currentColor"/>
+          </svg>
+        </span>
+        <h1 class="brand-name">specdex</h1>
+      </a>
+      <button type="button" class="sb-collapse" id="sb-collapse"
+              aria-label="Collapse sidebar" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15" fill="none"
+             stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"
+             stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
     <nav class="view-seg" id="view-seg" aria-label="Views" role="tablist">
       <button type="button" id="nav-agents" class="seg-btn" role="tab" aria-selected="true">
         <span class="seg-label">agents</span>
@@ -53,10 +63,17 @@
   </header>
 
   <div class="shell">
-    <aside class="sidebar" id="sidebar" aria-label="Projects"></aside>
+    <aside class="sidebar" id="sidebar" aria-label="Projects">
+      <div class="sb-list" id="sb-list"></div>
+    </aside>
     <div class="content">
       <div class="toolbar" id="toolbar" aria-label="Fleet controls">
         <div id="fleet-controls">
+          <div class="fleet-sort" id="fleet-sort" role="group" aria-label="Sort specs">
+            <button type="button" data-sort="recent">Recent</button>
+            <button type="button" data-sort="state">State</button>
+            <button type="button" data-sort="name">Name</button>
+          </div>
           <div class="fleet-sort" id="layout-toggle" role="group" aria-label="Layout">
             <button type="button" data-layout="cards" aria-pressed="false">
               <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
@@ -67,12 +84,6 @@
               List
             </button>
           </div>
-          <div class="fleet-sort" id="fleet-sort" role="group" aria-label="Sort specs">
-            <button type="button" data-sort="recent">Recent</button>
-            <button type="button" data-sort="state">State</button>
-            <button type="button" data-sort="name">Name</button>
-          </div>
-          <span class="fleet-count" id="fleet-count"></span>
         </div>
         <div id="signals-controls" hidden>
           <div class="fleet-sort" id="signals-scope" role="group" aria-label="Scope filter">
@@ -91,6 +102,7 @@
       <main class="signals-view" id="signals" aria-label="Signals" hidden></main>
       <section id="curator" class="curator-view" aria-label="Curator reports" hidden></section>
       <section id="liveteam" class="liveteam-view" aria-label="Live team" hidden></section>
+      <section id="archived" class="archived-view" aria-label="Archived specs" hidden></section>
     </div>
   </div>
 

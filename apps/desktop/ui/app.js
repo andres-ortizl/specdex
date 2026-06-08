@@ -3,6 +3,26 @@
 // `spec_detail`); opened directly in a browser it falls back to hardcoded
 // samples so this file doubles as a standalone prototype.
 
+// A silent JS error leaves the Tauri window blank with no clue why. Surface any
+// uncaught error / rejection on-screen instead so the cause is always visible.
+function showBootError(label, detail) {
+  let box = document.getElementById("boot-error");
+  if (!box) {
+    box = document.createElement("pre");
+    box.id = "boot-error";
+    box.style.cssText =
+      "margin:14px;padding:12px 14px;border-radius:8px;background:#fdecea;color:#611a15;" +
+      "font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;" +
+      "overflow:auto;max-height:60vh;border:1px solid #f2b8b2";
+    (document.body || document.documentElement).appendChild(box);
+  }
+  box.textContent += label + ": " + detail + "\n";
+}
+window.addEventListener("error", (e) =>
+  showBootError("error", (e.error && e.error.stack) || e.message));
+window.addEventListener("unhandledrejection", (e) =>
+  showBootError("unhandled rejection", (e.reason && e.reason.stack) || e.reason));
+
 const PHASES = [
   "setup", "plan", "build", "review", "ship", "verify", "complete", "accepted",
 ];
@@ -258,6 +278,10 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   caret:
     '<svg viewBox="0 0 24 24" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  archive:
+    '<svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  unarchive:
+    '<svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M12 18v-6m-2.4 2.4L12 12l2.4 2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
 // timeline glyphs per event family
@@ -361,6 +385,29 @@ function healthDot(health) {
 
 // ============================ fleet ============================
 
+// Hover-revealed archive control shared by the card and list-row.
+function archiveButton(row, cls) {
+  const b = el("button", cls);
+  b.type = "button";
+  b.title = "Archive";
+  b.setAttribute("aria-label", "Archive " + row.name);
+  b.innerHTML = ICONS.archive;
+  b.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    archiveSpec(row.project, row.name);
+  });
+  return b;
+}
+
+// Face-pile agent badge: a monogram circle, green-filled when the agent is active.
+function agentBadge(a) {
+  const b = el("div", "agent" + (a.active ? " active" : ""));
+  b.textContent = (a.role[0] || "?").toUpperCase();
+  b.title = a.role + (a.active ? "" : " · idle");
+  return b;
+}
+
 function renderMinion(row) {
   const card = el("article", "minion");
   card.dataset.health = row.health;
@@ -420,17 +467,9 @@ function renderMinion(row) {
   const foot = el("div", "m-foot");
   const agents = el("div", "agents");
   if (row.agents.length === 0) {
-    const none = el("span", "agent");
-    none.style.color = "var(--ink-faint)";
-    none.textContent = "no agents";
-    agents.appendChild(none);
+    agents.appendChild(el("span", "agents-none", "no agents"));
   } else {
-    row.agents.forEach((a) => {
-      const ag = el("div", "agent" + (a.active ? " active" : ""));
-      ag.appendChild(el("span", "agent-pip"));
-      ag.appendChild(document.createTextNode(a.role));
-      agents.appendChild(ag);
-    });
+    row.agents.forEach((a) => agents.appendChild(agentBadge(a)));
   }
   foot.appendChild(agents);
 
@@ -455,6 +494,7 @@ function renderMinion(row) {
     card.appendChild(blocked);
   }
 
+  card.appendChild(archiveButton(row, "m-archive"));
   return card;
 }
 
@@ -512,14 +552,9 @@ function renderListRow(row) {
 
   const agentsCell = el("div", "lc-agents");
   if (row.agents.length === 0) {
-    const none = el("span", "agent none lc-empty"); none.textContent = "—"; agentsCell.appendChild(none);
+    agentsCell.appendChild(el("span", "lc-empty", "—"));
   } else {
-    row.agents.forEach((a) => {
-      const ag = el("div", "agent" + (a.active ? " active" : ""));
-      ag.appendChild(el("span", "agent-pip"));
-      ag.appendChild(document.createTextNode(a.role));
-      agentsCell.appendChild(ag);
-    });
+    row.agents.forEach((a) => agentsCell.appendChild(agentBadge(a)));
   }
   r.appendChild(agentsCell);
 
@@ -550,12 +585,71 @@ function renderListRow(row) {
   upCell.title = row.updated_at || "";
   r.appendChild(upCell);
 
+  r.appendChild(archiveButton(row, "lr-archive"));
   return r;
 }
 
 let LAST_FLEET = [];
 let LAST_SIGNALS = [];
 let SIGNALS_SCOPE_FILTER = "all";
+
+// Entrance animation should play only for specs we haven't settled yet, so a
+// background poll repaint doesn't re-flash the whole grid. Deliberate view
+// changes (entering the fleet, switching layout/sort) set FLEET_REANIMATE to
+// replay the cascade once.
+let FLEET_ANIM_KEYS = new Set();
+let FLEET_REANIMATE = true;
+const rowKey = (r) => r.project + "/" + r.name;
+
+// Archive shelf. Wired mode persists via a marker file the backend owns; the
+// standalone prototype falls back to a localStorage key so the demo still works.
+let ARCHIVED = [];
+const tauriReady = () => !!(window.__TAURI__ && window.__TAURI__.core);
+function localArchivedSet() {
+  try { return new Set(JSON.parse(localStorage.dexArchived || "[]")); }
+  catch (_) { return new Set(); }
+}
+function saveLocalArchived(set) {
+  localStorage.dexArchived = JSON.stringify([...set]);
+}
+
+async function loadArchived() {
+  if (tauriReady()) {
+    ARCHIVED = await window.__TAURI__.core.invoke("archived_specs").catch(() => []);
+  } else {
+    const set = localArchivedSet();
+    ARCHIVED = FLEET.filter((r) => set.has(rowKey(r)));
+  }
+}
+
+async function archiveSpec(project, name) {
+  if (tauriReady()) {
+    await window.__TAURI__.core.invoke("archive_spec", { project, name }).catch(() => {});
+    // The registry watcher re-emits the fleet snapshot; pull the new shelf count.
+    await loadArchived();
+    renderSidebar(LAST_FLEET);
+  } else {
+    const set = localArchivedSet();
+    set.add(project + "/" + name);
+    saveLocalArchived(set);
+    await loadArchived();
+    renderFleet(LAST_FLEET);
+  }
+}
+
+async function unarchiveSpec(project, name) {
+  if (tauriReady()) {
+    await window.__TAURI__.core.invoke("unarchive_spec", { project, name }).catch(() => {});
+  } else {
+    const set = localArchivedSet();
+    set.delete(project + "/" + name);
+    saveLocalArchived(set);
+    renderFleet(LAST_FLEET);
+  }
+  await loadArchived();
+  renderArchived();
+  renderSidebar(LAST_FLEET);
+}
 
 // Fleet sort: "recent" (last activity), "state" (health), or "name". Persisted.
 const FLEET_SORTS = ["recent", "state", "name"];
@@ -713,15 +807,20 @@ function renderTeamPanes(result) {
   const wrap = el("div", "d-team-panes");
   if (panes.length === 0) return wrap; // empty; CSS hides via :empty
   const headRow = el("div", "team-panes-head-row");
-  // The "live team" label opens the dedicated full-screen view for this spec.
+
+  // "live team" opens the dedicated full-screen view; a green dot marks the
+  // running swarm (the panel only renders while the team is live).
   const open = el("button", "team-open");
   open.type = "button";
+  open.title = panes.map((p) => p.title).join(" · ");
+  open.appendChild(el("span", "team-live-dot"));
   open.appendChild(el("span", "team-panes-head", "live team"));
   open.appendChild(el("span", "team-open-exp", "↗"));
   open.addEventListener("click", () => {
     if (CURRENT_DETAIL) navigate({ view: "liveteam", project: CURRENT_DETAIL.state.project, name: CURRENT_DETAIL.state.name });
   });
   headRow.appendChild(open);
+
   // Watch team button: opens a read-only terminal view of the live swarm session.
   if (result && result.socket_name) {
     const watchBtn = el("button", "d-attach");
@@ -739,15 +838,8 @@ function renderTeamPanes(result) {
     });
     headRow.appendChild(watchBtn);
   }
+
   wrap.appendChild(headRow);
-  panes.forEach(({ title, text }) => {
-    const pane = el("div", "team-pane");
-    pane.appendChild(el("span", "team-pane-label", title));
-    const pre = el("pre", "team-pane-text");
-    paintPaneText(pre, text);
-    pane.appendChild(pre);
-    wrap.appendChild(pane);
-  });
   return wrap;
 }
 
@@ -755,10 +847,10 @@ function renderTeamPanes(result) {
 
 let LIVETEAM = null; // { project, name, agent } — the dedicated full-screen view
 
-function renderLiveTeam(project, name) {
+function renderLiveTeam(project, name, agent) {
   const root = document.getElementById("liveteam");
   root.textContent = "";
-  LIVETEAM = { project, name, agent: null };
+  LIVETEAM = { project, name, agent: agent || null };
 
   const screen = el("div", "lt");
   const head = el("div", "lt-head");
@@ -878,9 +970,11 @@ function renderFleet(rows) {
   const fleetEl = document.getElementById("fleet");
   const listwrap = document.getElementById("listwrap");
   const list = document.getElementById("list");
-  const count = document.getElementById("fleet-count");
 
-  const visible = PROJECT_FILTER ? LAST_FLEET.filter((r) => r.project === PROJECT_FILTER) : LAST_FLEET;
+  // Wired mode: the backend already drops archived specs from the snapshot.
+  // Standalone prototype: filter the local shelf here so archive still demos.
+  const base = tauriReady() ? LAST_FLEET : LAST_FLEET.filter((r) => !localArchivedSet().has(rowKey(r)));
+  const visible = PROJECT_FILTER ? base.filter((r) => r.project === PROJECT_FILTER) : base;
 
   if (visible.length === 0) {
     fleetEl.textContent = "";
@@ -891,14 +985,11 @@ function renderFleet(rows) {
     empty.style.cssText =
       "grid-column:1/-1;color:var(--ink-faint);text-align:center;padding:56px 8px;line-height:1.7";
     fleetEl.appendChild(empty);
-    count.textContent = "0 specs";
     fleetEl.hidden = false;
     listwrap.hidden = true;
     return;
   }
 
-  count.textContent = visible.length + (visible.length === 1 ? " spec" : " specs") +
-    (PROJECT_FILTER ? " · " + PROJECT_FILTER : "");
   const sorted = sortRows(visible);
 
   const onFleet = document.getElementById("detail").hidden;
@@ -907,22 +998,33 @@ function renderFleet(rows) {
     listwrap.hidden = LAYOUT !== "list";
   }
 
+  if (FLEET_REANIMATE) {
+    FLEET_ANIM_KEYS = new Set();
+    FLEET_REANIMATE = false;
+  }
+  let fresh = 0;
+  const settle = (node, key, step) => {
+    if (FLEET_ANIM_KEYS.has(key)) node.classList.add("no-anim");
+    else node.style.animationDelay = fresh++ * step + "ms";
+  };
+
   if (LAYOUT === "cards") {
     fleetEl.textContent = "";
-    sorted.forEach((row, i) => {
+    sorted.forEach((row) => {
       const card = renderMinion(row);
-      card.style.animationDelay = i * 40 + "ms";
+      settle(card, rowKey(row), 40);
       fleetEl.appendChild(card);
     });
   } else {
     list.textContent = "";
     list.appendChild(renderListHeader());
-    sorted.forEach((row, i) => {
+    sorted.forEach((row) => {
       const r = renderListRow(row);
-      r.style.animationDelay = i * 24 + "ms";
+      settle(r, rowKey(row), 24);
       list.appendChild(r);
     });
   }
+  FLEET_ANIM_KEYS = new Set(sorted.map(rowKey));
 }
 
 // Re-evaluate liveness on a slow tick: motion follows real recency, not labels.
@@ -954,17 +1056,18 @@ function setProjectFilter(project) {
     location.hash = "";
     CURRENT_DETAIL = null;
   }
+  FLEET_REANIMATE = true;
   renderFleet(LAST_FLEET);
 }
 
 function renderSidebar(rows) {
-  const root = document.getElementById("sidebar");
+  const root = document.getElementById("sb-list");
   if (!root) return;
   root.textContent = "";
-  root.appendChild(el("div", "sb-head", "Projects"));
 
   if (!rows || rows.length === 0) {
     root.appendChild(el("div", "sb-empty", "No projects yet.<br>Start a spec to populate the fleet."));
+    appendArchivedEntry(root);
     return;
   }
 
@@ -1021,6 +1124,72 @@ function renderSidebar(rows) {
     }
     root.appendChild(section);
   });
+
+  appendArchivedEntry(root);
+}
+
+// "Archived (n)" shelf link — only surfaces when something is shelved.
+function appendArchivedEntry(root) {
+  if (!ARCHIVED || ARCHIVED.length === 0) return;
+  const onArchived = !document.getElementById("archived").hidden;
+  const btn = el("button", "sb-archived" + (onArchived ? " active" : ""));
+  btn.type = "button";
+  btn.setAttribute("aria-pressed", onArchived ? "true" : "false");
+  const ico = el("span", "sb-archived-ico");
+  ico.innerHTML = ICONS.archive;
+  btn.appendChild(ico);
+  btn.appendChild(el("span", "sb-archived-label", "Archived"));
+  const count = el("span", "sb-proj-count");
+  count.textContent = ARCHIVED.length;
+  btn.appendChild(count);
+  btn.addEventListener("click", () => navigate({ view: "archived" }));
+  root.appendChild(btn);
+}
+
+function renderArchived() {
+  const root = document.getElementById("archived");
+  if (!root) return;
+  root.textContent = "";
+
+  const head = el("div", "archived-head");
+  head.appendChild(el("h2", "archived-title", "Archived"));
+  head.appendChild(el("span", "archived-sub",
+    ARCHIVED.length + (ARCHIVED.length === 1 ? " spec" : " specs") + " hidden from the fleet"));
+  root.appendChild(head);
+
+  if (ARCHIVED.length === 0) {
+    root.appendChild(el("div", "archived-empty",
+      "Nothing archived.<br>Archive a spec from the fleet to shelve it here."));
+    return;
+  }
+
+  const list = el("div", "archived-list");
+  [...ARCHIVED]
+    .sort((a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name))
+    .forEach((row) => {
+      const item = el("div", "archived-item");
+      item.appendChild(healthDot(row.health));
+
+      const meta = el("div", "archived-item-meta");
+      const name = el("span", "archived-item-name");
+      name.textContent = row.name;
+      name.title = row.name;
+      const sub = el("span", "archived-item-proj");
+      sub.textContent = row.project + " · " + row.phase;
+      meta.append(name, sub);
+      item.appendChild(meta);
+
+      const restore = el("button", "archived-restore");
+      restore.type = "button";
+      restore.title = "Restore to fleet";
+      restore.setAttribute("aria-label", "Restore " + row.name);
+      restore.innerHTML = ICONS.unarchive + "<span>Restore</span>";
+      restore.addEventListener("click", () => unarchiveSpec(row.project, row.name));
+      item.appendChild(restore);
+
+      list.appendChild(item);
+    });
+  root.appendChild(list);
 }
 
 function cfgRow(k, v) {
@@ -1842,6 +2011,7 @@ function showView(view) {
   const signalsEl = document.getElementById("signals");
   const curatorEl = document.getElementById("curator");
   const liveteamEl = document.getElementById("liveteam");
+  const archivedEl = document.getElementById("archived");
 
   if (toolbar) toolbar.hidden = !(onFleet || onSignals);
   if (controls) controls.hidden = !onFleet;
@@ -1850,6 +2020,7 @@ function showView(view) {
   if (signalsEl) signalsEl.hidden = !onSignals;
   if (curatorEl) curatorEl.hidden = !onCurator;
   if (liveteamEl) liveteamEl.hidden = view !== "liveteam";
+  if (archivedEl) archivedEl.hidden = view !== "archived";
 
   if (!onFleet) {
     document.getElementById("fleet").hidden = true;
@@ -1903,10 +2074,17 @@ async function navigate(route) {
     location.hash = "#/curator";
   } else if (route.view === "liveteam") {
     CURRENT_DETAIL = null;
-    renderLiveTeam(route.project, route.name);
+    renderLiveTeam(route.project, route.name, route.agent);
     showView("liveteam");
     renderSidebar(LAST_FLEET);
     location.hash = "#/spec/" + encodeURIComponent(route.project) + "/" + encodeURIComponent(route.name) + "/team";
+  } else if (route.view === "archived") {
+    CURRENT_DETAIL = null;
+    await loadArchived();
+    showView("archived");
+    renderArchived();
+    renderSidebar(LAST_FLEET);
+    location.hash = "#/archived";
   } else {
     showView("fleet");
     location.hash = "";
@@ -1919,6 +2097,7 @@ async function navigate(route) {
 function routeFromHash() {
   if (location.hash === "#/signals") { navigate({ view: "signals" }); return; }
   if (location.hash === "#/curator") { navigate({ view: "curator" }); return; }
+  if (location.hash === "#/archived") { navigate({ view: "archived" }); return; }
   const mt = location.hash.match(/^#\/spec\/([^/]+)\/([^/]+)\/team$/);
   if (mt) { navigate({ view: "liveteam", project: decodeURIComponent(mt[1]), name: decodeURIComponent(mt[2]) }); return; }
   const m = location.hash.match(/^#\/spec\/([^/]+)\/([^/]+)$/);
@@ -1964,6 +2143,22 @@ function initTheme() {
 
 // ============================ boot ============================
 
+function initSidebarCollapse() {
+  const btn = document.getElementById("sb-collapse");
+  if (!btn) return;
+  const apply = (collapsed) => {
+    document.documentElement.dataset.sidebar = collapsed ? "collapsed" : "open";
+    btn.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  };
+  apply(localStorage.dexSidebarCollapsed === "1");
+  btn.addEventListener("click", () => {
+    const collapsed = document.documentElement.dataset.sidebar !== "collapsed";
+    localStorage.dexSidebarCollapsed = collapsed ? "1" : "0";
+    apply(collapsed);
+  });
+}
+
 function initFleetSort() {
   const group = document.getElementById("fleet-sort");
   if (!group) return;
@@ -1975,6 +2170,7 @@ function initFleetSort() {
       FLEET_SORT = b.dataset.sort;
       localStorage.dexFleetSort = FLEET_SORT;
       paint();
+      FLEET_REANIMATE = true;
       renderFleet(LAST_FLEET);
     })
   );
@@ -2008,6 +2204,7 @@ function initLayoutToggle() {
       LAYOUT = b.dataset.layout;
       localStorage.dexFleetLayout = LAYOUT;
       paint();
+      FLEET_REANIMATE = true;
       renderFleet(LAST_FLEET);
     })
   );
@@ -2030,11 +2227,13 @@ function boot() {
   initLayoutToggle();
   initFleetSort();
   initSignalsScope();
+  initSidebarCollapse();
   window.addEventListener("hashchange", routeFromHash);
 
   const t = window.__TAURI__;
   if (t && t.core && t.event) {
     t.core.invoke("fleet").then(renderFleet).catch(() => renderFleet([]));
+    loadArchived().then(() => renderSidebar(LAST_FLEET)).catch(() => {});
     t.event.listen("fleet", (e) => {
       renderFleet(e.payload || []);
       if (CURRENT_DETAIL && !document.getElementById("detail").hidden) {
@@ -2050,6 +2249,7 @@ function boot() {
     });
   } else {
     renderFleet(FLEET); // standalone prototype (opened directly in a browser)
+    loadArchived().then(() => renderSidebar(LAST_FLEET));
   }
 
   routeFromHash();
@@ -2061,5 +2261,9 @@ function boot() {
   }, 15_000);
 }
 
-initTheme();
-boot();
+try {
+  initTheme();
+  boot();
+} catch (err) {
+  showBootError("boot", (err && err.stack) || err);
+}

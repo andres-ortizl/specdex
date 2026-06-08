@@ -312,6 +312,9 @@ h1, h2 { margin: 0; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Already-settled rows: a background poll repaint must not re-flash them. */
+.no-anim { animation: none !important; }
+
 /* ---- header row: life-dot + name + pr ---- */
 
 .m-head {
@@ -448,29 +451,29 @@ h1, h2 { margin: 0; }
   flex-wrap: wrap;
 }
 
-.agents { display: flex; align-items: center; gap: var(--s-3); }
+/* agents = a face-pile of monogram circles; green fill marks who's working */
+.agents { display: flex; align-items: center; }
+.agents-none { font-size: 12px; color: var(--ink-faint); }
 
 .agent {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 450;
-  letter-spacing: -0.01em;
-  color: var(--ink-muted);
-}
-.agent-pip {
-  width: 7px; height: 7px;
-  border-radius: var(--r-pill);
-  border: 1.5px solid var(--ink-faint);
-  background: transparent;
   flex: none;
+  width: 21px; height: 21px;
+  margin-left: -6px;                  /* overlap into the previous circle */
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 600;
+  color: var(--ink-faint);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  box-shadow: 0 0 0 2px var(--surface);   /* ring carves a gap between overlaps */
 }
-.agent.active { color: var(--ink); }
-.agent.active .agent-pip {
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--alive) 38%, #fff), var(--alive));
+.agent:first-child { margin-left: 0; }
+.agent.active {
+  color: #10140e;
+  background: var(--alive);
   border-color: transparent;
-  box-shadow: 0 0 4px color-mix(in srgb, var(--alive) 55%, transparent);
 }
 
 .review-meta {
@@ -505,7 +508,6 @@ h1, h2 { margin: 0; }
    it changed within the recency window (see app.js). Color always = health. */
 
 .live .life-dot { animation: breathe 2.6s var(--ease-soft) infinite; }
-.live .agent.active .agent-pip { animation: breathe 2.6s var(--ease-soft) infinite; }
 .live[data-health="needs-you"] .life-dot { animation: attention 3.4s var(--ease-soft) infinite; }
 
 /* D1 — green working pulse for alive specs, driven by health label (not recency). */
@@ -589,7 +591,7 @@ h1, h2 { margin: 0; }
   margin: var(--s-4) var(--s-6) 0;
   min-height: 28px;
 }
-.toolbar .fleet-count { margin-left: auto; }
+.toolbar #layout-toggle { margin-left: auto; }   /* sort on the left, layout on the right */
 
 /* fleet-controls wrapper: transparent to layout, hideable as a unit */
 #fleet-controls { display: contents; }
@@ -650,6 +652,37 @@ h1, h2 { margin: 0; }
 .list-row:last-child { border-bottom: none; }
 .list-row:hover { background: var(--surface-2); }
 .list-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.list-row { position: relative; }   /* anchor the hover-revealed archive control */
+
+/* archive affordance — hover-revealed on cards + list rows */
+.m-archive, .lr-archive {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--r-chip);
+  background: var(--surface-2);
+  box-shadow: var(--lift-1);
+  color: var(--ink-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+  z-index: 3;
+}
+.m-archive svg, .lr-archive svg {
+  width: 15px; height: 15px; stroke: currentColor; fill: none;
+}
+.m-archive { top: var(--s-3); right: var(--s-3); }
+.lr-archive { top: 50%; right: var(--s-3); transform: translateY(-50%); }
+.minion:hover .m-archive, .minion:focus-within .m-archive,
+.list-row:hover .lr-archive, .list-row:focus-within .lr-archive { opacity: 1; }
+.m-archive:hover, .lr-archive:hover { color: var(--accent); background: var(--surface); }
+.m-archive:focus-visible, .lr-archive:focus-visible {
+  opacity: 1; outline: 2px solid var(--accent); outline-offset: 2px;
+}
 
 .lc-dot { display: flex; align-items: center; }
 .lc-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -677,8 +710,7 @@ h1, h2 { margin: 0; }
   font-size: 12.5px; letter-spacing: -0.01em; color: var(--ink-muted);
   text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.lc-agents { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
-.lc-agents .agent { font-size: 12px; }
+.lc-agents { display: flex; align-items: center; min-width: 0; }
 .lc-pr {
   font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums;
   min-width: 0; display: flex; align-items: center; gap: 5px;
@@ -1041,23 +1073,50 @@ h1, h2 { margin: 0; }
   align-self: stretch;
   border-right: 1px solid var(--rule);
   background: var(--surface-2);
-  padding: var(--s-4) 0;
   position: sticky;
   top: 57px;                          /* under the hairline-ruled topbar */
   height: calc(100vh - 57px);
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width var(--dur) var(--ease-soft);
 }
 
 .content { flex: 1 1 auto; min-width: 0; }
 
-.sb-head {
-  font-size: 12px;
-  font-weight: 450;
-  letter-spacing: -0.01em;
-  color: var(--ink-faint);
-  text-transform: capitalize;
-  padding: 0 var(--s-4) var(--s-3);
+.sb-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--s-3) var(--s-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
 }
+
+/* collapse toggle lives in the topbar, right of the brand */
+.topbar-left { display: flex; align-items: center; gap: var(--s-4); min-width: 0; }
+
+.sb-collapse {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--r-chip);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.sb-collapse:hover { color: var(--ember); background: var(--surface); }
+.sb-collapse:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sb-collapse svg { transition: transform var(--dur) var(--ease-soft); }
+/* caret points right by default (expand); rotate to point left when open */
+html[data-sidebar="open"] .sb-collapse svg { transform: rotate(180deg); }
+
+/* collapsed: the sidebar slides away entirely; the topbar toggle brings it back */
+html[data-sidebar="collapsed"] .sidebar { width: 0; border-right-color: transparent; }
 
 .sb-empty {
   font-size: 12px;
@@ -1066,14 +1125,22 @@ h1, h2 { margin: 0; }
   line-height: 1.6;
 }
 
-.sb-project { border-top: 1px solid var(--rule-soft); }
-.sb-project:last-child { border-bottom: 1px solid var(--rule-soft); }
+/* each project is a raised drams chip — no dividers; lifts on hover, ember ring when active */
+.sb-project {
+  background: var(--surface);
+  border-radius: 9px;
+  box-shadow: var(--lift-1);
+  overflow: hidden;
+  transition: transform var(--dur-fast) var(--ease-soft), box-shadow var(--dur-fast) var(--ease);
+}
+.sb-project:hover { transform: translateY(-1px); }
+.sb-project.active { box-shadow: var(--lift-1), inset 0 0 0 1px var(--ember); }
 
 .sb-proj-head {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin: 2px var(--s-2);
+  padding: var(--s-2) var(--s-3);
 }
 
 /* the row body is the filter control: click to scope the grid to this project */
@@ -1086,28 +1153,18 @@ h1, h2 { margin: 0; }
   background: none;
   border: none;
   cursor: pointer;
-  padding: var(--s-3);
-  border-radius: var(--r-chip);
+  padding: 0;
   color: var(--ink);
   font: inherit;
   text-align: left;
-  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
-              box-shadow var(--dur-fast) var(--ease);
+  transition: color var(--dur-fast) var(--ease);
 }
-.sb-proj-main:hover {
-  color: var(--accent);
-  background: var(--surface);
-  box-shadow: var(--lift-1);          /* the row lifts off the sunk sidebar */
-}
-.sb-proj-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sb-proj-main:hover { color: var(--accent); }
+.sb-proj-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--r-chip); }
 
-/* active filter: the row glows ember with an inset edge marker */
+/* active filter: ember name + the chip ring above */
 .sb-project.active .sb-proj-main,
-.sb-project.active .sb-proj-main:hover {
-  color: var(--ember);
-  background: var(--ember-soft);
-  box-shadow: inset 2px 0 0 var(--ember);
-}
+.sb-project.active .sb-proj-name { color: var(--ember); }
 .sb-project.active .sb-proj-name { font-weight: 600; }
 
 /* a tiny drams push-button instead of a chevron: domed + raised, its LED dark.
@@ -1156,6 +1213,30 @@ h1, h2 { margin: 0; }
   font-variant-numeric: tabular-nums;
   flex: none;
 }
+
+/* sidebar "Archived (n)" shelf link — a ghost row below the project chips */
+.sb-archived {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+  padding: var(--s-3);
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.sb-archived:hover { color: var(--ember); background: var(--surface); }
+.sb-archived:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sb-archived.active { color: var(--ink); font-weight: 600; }
+.sb-archived-ico { flex: none; display: grid; place-items: center; }
+.sb-archived-ico svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
+.sb-archived-label { flex: 1 1 auto; }
 
 .sb-proj-body {
   padding: 0 var(--s-4) var(--s-3) var(--s-3);
@@ -1421,8 +1502,12 @@ h1, h2 { margin: 0; }
 .team-panes-head-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;       /* live team + watch grouped on the right */
+  gap: var(--s-2);
 }
+/* watch reuses .d-attach (which right-pushes itself elsewhere); here both
+   buttons already group right, so drop the auto margin to keep them adjacent. */
+.team-panes-head-row .d-attach { margin-left: 0; }
 
 .team-panes-head {
   font-size: 12px;
@@ -1431,18 +1516,12 @@ h1, h2 { margin: 0; }
   color: var(--ink-faint);
 }
 
-.team-pane {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-}
-
-.team-pane-label {
-  font-size: 12px;
-  font-weight: 450;
-  letter-spacing: -0.01em;
-  color: var(--ink-muted);
-  font-family: var(--font-mono);
+/* a single pulsing green dot inside the "live team" button = swarm is running */
+.team-live-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--alive);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--alive) 60%, transparent);
+  animation: working-pulse 2.8s var(--ease-soft) infinite;
 }
 
 /* Zen terminal palette — the 16 ANSI colors re-toned into the drams system.
@@ -1460,22 +1539,6 @@ h1, h2 { margin: 0; }
   --term-1:#d98a86; --term-9:#d98a86;
   --term-5:#c79ac7; --term-13:#c79ac7;
   --term-6:#7fc0ba; --term-14:#7fc0ba;
-}
-
-.team-pane-text {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--ink-muted);
-  white-space: pre;
-  background: var(--sunk);
-  border: 1px solid var(--rule-soft);
-  border-radius: var(--r-chip);
-  box-shadow: var(--press);
-  padding: var(--s-2) var(--s-3);
-  max-height: 200px;
-  overflow: auto;
 }
 
 /* "live team" in detail — a raised push-button (matches "watch") that opens
@@ -1804,6 +1867,72 @@ h1, h2 { margin: 0; }
   color: var(--ink-faint);
   padding: var(--s-4) 0;
 }
+
+/* ============================ archived shelf ============================ */
+
+.archived-view {
+  padding: var(--s-5) var(--s-6);
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.archived-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.archived-title { font-size: 16px; font-weight: 560; letter-spacing: -0.01em; }
+.archived-sub { font-size: 12px; color: var(--ink-faint); }
+
+.archived-empty {
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.7;
+  padding: var(--s-6) 0;
+  text-align: center;
+}
+
+.archived-list { display: flex; flex-direction: column; }
+
+.archived-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-2);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.archived-item:last-child { border-bottom: none; }
+
+.archived-item-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.archived-item-name {
+  font-size: 14px; font-weight: 500; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.archived-item-proj { font-size: 12px; color: var(--ink-faint); }
+
+.archived-restore {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: none;
+  border-radius: var(--r-chip);
+  background: var(--surface-2);
+  box-shadow: var(--lift-1);
+  color: var(--ink-soft, var(--ink-faint));
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.archived-restore:hover { color: var(--accent); background: var(--surface); }
+.archived-restore:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.archived-restore svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
 
 /* ============================ reduced motion ============================ */
 
