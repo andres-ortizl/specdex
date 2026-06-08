@@ -127,6 +127,41 @@ fn save_lesson_to(root: &std::path::Path, project: &str, lesson: &Lesson) -> Res
     Ok(())
 }
 
+impl Lesson {
+    /// JSON for consumers (desktop, CLI `--json`) — includes the `#[serde(skip)]`
+    /// `id` and `insight` that the TOML frontmatter deliberately omits.
+    pub fn to_json(&self) -> serde_json::Value {
+        let mut v = serde_json::to_value(self).unwrap_or_else(|_| serde_json::json!({}));
+        if let Some(obj) = v.as_object_mut() {
+            obj.insert("id".into(), serde_json::Value::String(self.id.clone()));
+            obj.insert("insight".into(), serde_json::Value::String(self.insight.clone()));
+        }
+        v
+    }
+}
+
+/// Every project's lessons across the registry, grouped by project (sorted),
+/// skipping projects with no lessons.
+pub fn load_all_lessons() -> Result<Vec<(String, Vec<Lesson>)>> {
+    let root = crate::paths::spec_root()?;
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for entry in fs::read_dir(&root)?.flatten() {
+        if entry.file_name().to_string_lossy().starts_with('.') || !entry.path().is_dir() {
+            continue;
+        }
+        let project = entry.file_name().to_string_lossy().into_owned();
+        let lessons = load_lessons(&project)?;
+        if !lessons.is_empty() {
+            out.push((project, lessons));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

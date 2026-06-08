@@ -1998,18 +1998,116 @@ async function loadAndRenderCurator() {
   });
 }
 
+// ============================ memory (lessons) ============================
+
+async function loadAndRenderMemory() {
+  const t = window.__TAURI__;
+  let groups = [];
+  if (t && t.core) groups = await t.core.invoke("memory").catch(() => []);
+  else groups = sampleMemory();
+  renderMemory(groups || []);
+}
+
+function renderMemory(groups) {
+  const root = document.getElementById("memory");
+  if (!root) return;
+  root.textContent = "";
+
+  const total = groups.reduce((n, g) => n + (g.lessons ? g.lessons.length : 0), 0);
+  const head = el("div", "mem-head");
+  head.appendChild(el("h2", "mem-title", "Memory"));
+  head.appendChild(el("span", "mem-sub",
+    total + (total === 1 ? " lesson" : " lessons") +
+    (groups.length ? " · " + groups.length + (groups.length === 1 ? " project" : " projects") : "")));
+  root.appendChild(head);
+
+  if (groups.length === 0) {
+    root.appendChild(el("div", "mem-empty",
+      "No lessons yet.<br>The curator will distill them from agent notes — or add one with <code>dex lessons add</code>."));
+    return;
+  }
+
+  groups.forEach((g) => {
+    const group = el("div", "mem-group");
+    const gh = el("div", "mem-group-head");
+    gh.appendChild(el("span", "mem-project", g.project));
+    gh.appendChild(el("span", "mem-count", String((g.lessons || []).length)));
+    group.appendChild(gh);
+
+    (g.lessons || []).forEach((l) => {
+      const card = el("div", "mem-card");
+      card.dataset.state = l.state || "active";
+
+      const top = el("div", "mem-card-top");
+      top.appendChild(el("span", "mem-scope", l.scope || "project"));
+      const summary = el("span", "mem-summary");
+      summary.textContent = l["abstract"] || l.summary || "";
+      top.appendChild(summary);
+      if (l.state && l.state !== "active") top.appendChild(el("span", "mem-state", l.state));
+      group.appendChild(card);
+      card.appendChild(top);
+
+      if (l.trigger) {
+        const trig = el("div", "mem-trigger");
+        trig.appendChild(el("span", "mem-trig-label", "when"));
+        trig.appendChild(document.createTextNode(" " + l.trigger));
+        card.appendChild(trig);
+      }
+      if (l.insight) {
+        const ins = el("div", "mem-insight");
+        ins.textContent = l.insight;
+        card.appendChild(ins);
+      }
+
+      const meta = el("div", "mem-meta");
+      if (l.id) meta.appendChild(el("span", "mem-id", l.id));
+      if (typeof l.confidence === "number") meta.appendChild(el("span", "mem-conf", "conf " + l.confidence.toFixed(2)));
+      if (l.anchor && l.anchor.paths && l.anchor.paths.length) {
+        meta.appendChild(el("span", "mem-anchor", l.anchor.paths.join(", ")));
+      }
+      if (meta.childNodes.length) card.appendChild(meta);
+    });
+    root.appendChild(group);
+  });
+}
+
+// Standalone-prototype fallback — seeded with lessons we actually learned this session.
+function sampleMemory() {
+  return [{
+    project: "specdex",
+    lessons: [
+      {
+        id: "test-isolation-spec-root", scope: "skill", state: "active", confidence: 0.9,
+        "abstract": "Tests that reach through spec_root() pollute the real ~/.spec.",
+        trigger: "writing tests for registry I/O",
+        insight: "Add root-parameterized internals (e.g. load_lessons_from(root, …)) and use a temp root in tests — mirrors load_notes_from / collect_specs_from. Going through the public fns writes to the live registry and races other tests under parallel execution.",
+        anchor: { paths: ["crates/core/src/lessons.rs"], git_rev: "925c0b2" },
+      },
+      {
+        id: "toml-frontmatter-no-yaml-dep", scope: "project", state: "active", confidence: 0.7,
+        "abstract": "Use TOML frontmatter (+++), not a new YAML dep.",
+        trigger: "storing structured docs in the registry",
+        insight: "Lessons store metadata as +++ TOML frontmatter + markdown body, reusing the existing toml crate. chrono DateTime roundtrips as an RFC3339 string in TOML.",
+        anchor: { paths: ["crates/core/src/lessons.rs"] },
+      },
+    ],
+  }];
+}
+
 // ============================ routing ============================
 
 function showView(view) {
   const onFleet = view === "fleet";
   const onSignals = view === "signals";
   const onCurator = view === "curator";
+  const onMemory = view === "memory";
   const toolbar = document.getElementById("toolbar");
   const controls = document.getElementById("fleet-controls");
   const sigControls = document.getElementById("signals-controls");
   const listwrap = document.getElementById("listwrap");
   const signalsEl = document.getElementById("signals");
   const curatorEl = document.getElementById("curator");
+  const memoryEl = document.getElementById("memory");
   const liveteamEl = document.getElementById("liveteam");
   const archivedEl = document.getElementById("archived");
 
@@ -2019,6 +2117,7 @@ function showView(view) {
   document.getElementById("detail").hidden = view !== "detail";
   if (signalsEl) signalsEl.hidden = !onSignals;
   if (curatorEl) curatorEl.hidden = !onCurator;
+  if (memoryEl) memoryEl.hidden = !onMemory;
   if (liveteamEl) liveteamEl.hidden = view !== "liveteam";
   if (archivedEl) archivedEl.hidden = view !== "archived";
 
@@ -2033,9 +2132,11 @@ function showView(view) {
   const navAgents = document.getElementById("nav-agents");
   const navSignals = document.getElementById("nav-signals");
   const navCurator = document.getElementById("nav-curator");
+  const navMemory = document.getElementById("nav-memory");
   if (navAgents) navAgents.setAttribute("aria-selected", onFleet ? "true" : "false");
   if (navSignals) navSignals.setAttribute("aria-selected", onSignals ? "true" : "false");
   if (navCurator) navCurator.setAttribute("aria-selected", onCurator ? "true" : "false");
+  if (navMemory) navMemory.setAttribute("aria-selected", onMemory ? "true" : "false");
 }
 
 async function loadDetail(project, name) {
@@ -2072,6 +2173,12 @@ async function navigate(route) {
     showView("curator");
     renderSidebar(LAST_FLEET);
     location.hash = "#/curator";
+  } else if (route.view === "memory") {
+    CURRENT_DETAIL = null;
+    await loadAndRenderMemory();
+    showView("memory");
+    renderSidebar(LAST_FLEET);
+    location.hash = "#/memory";
   } else if (route.view === "liveteam") {
     CURRENT_DETAIL = null;
     renderLiveTeam(route.project, route.name, route.agent);
@@ -2097,6 +2204,7 @@ async function navigate(route) {
 function routeFromHash() {
   if (location.hash === "#/signals") { navigate({ view: "signals" }); return; }
   if (location.hash === "#/curator") { navigate({ view: "curator" }); return; }
+  if (location.hash === "#/memory") { navigate({ view: "memory" }); return; }
   if (location.hash === "#/archived") { navigate({ view: "archived" }); return; }
   const mt = location.hash.match(/^#\/spec\/([^/]+)\/([^/]+)\/team$/);
   if (mt) { navigate({ view: "liveteam", project: decodeURIComponent(mt[1]), name: decodeURIComponent(mt[2]) }); return; }
@@ -2220,9 +2328,11 @@ function boot() {
   const navAgents = document.getElementById("nav-agents");
   const navSignals = document.getElementById("nav-signals");
   const navCurator = document.getElementById("nav-curator");
+  const navMemory = document.getElementById("nav-memory");
   if (navAgents) navAgents.addEventListener("click", () => navigate({ view: "fleet" }));
   if (navSignals) navSignals.addEventListener("click", () => navigate({ view: "signals" }));
   if (navCurator) navCurator.addEventListener("click", () => navigate({ view: "curator" }));
+  if (navMemory) navMemory.addEventListener("click", () => navigate({ view: "memory" }));
 
   initLayoutToggle();
   initFleetSort();
