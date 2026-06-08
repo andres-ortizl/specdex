@@ -265,13 +265,46 @@ bottom-right:
 | `needs-you` | ember | slow pulse 3.4s | blocked-reason line + flag |
 | `done` | neutral grey + **check** | none, solid | rail fully ink-grey (`.rail.complete`) |
 
-No card top-edge stripe. No card wash. The labeled **legend** above the fleet is the key.
+No card top-edge stripe. No card wash. Status reads from the **dot + its tooltip**
+(`working` / `idle` / `stale — no heartbeat` / `needs you — blocked` / `done`) — there is
+no standing legend; a thin toolbar under the topbar carries the layout/sort controls.
 
 ### Phase → treatment
 
 Phase drives the **rail** (node positions) and the **label** only. The rail is **fully
 neutral** — `done` nodes in ink-grey, `current` node in `--accent` blue, future in
 `--well`. Health has no effect on rail color.
+
+---
+
+## 6b. Scrollbars
+
+DRAMS "soft hardware": thin (9px), no track, a quiet pill thumb in `--rule` that darkens
+to `--ink-faint` on hover. Applied app-wide (`*::-webkit-scrollbar*` plus the
+`scrollbar-width:thin; scrollbar-color` fallback). Reuses existing tokens — no new colour,
+adapts light↔dark for free. Scrolling is never an accent or health hue: scrolling is not
+status.
+
+## 6c. Live-team terminal screen
+
+A dedicated full-height view (`#liveteam`, `calc(100vh - 57px)`) reached from a spec
+detail's "live team ↗" header; the external **watch** button (a real terminal) is kept
+alongside. Layout is L-C: a `dex-coder / dex-reviewer` segmented switcher above one big
+scrolling terminal (`.lt-term`).
+
+The terminal renders the captured swarm pane (tmux `capture-pane -e`, so ANSI survives)
+through a zen parser that re-tones the colour into the system rather than reproducing it:
+
+- The 16 ANSI slots map to the app's own tokens (`--term-*`): green=`--alive`,
+  gold=`--stale`, blue=`--accent`, greys=`--ink*`; only brick/mauve/teal get their own
+  muted values (with dark variants).
+- 256-colour and truecolour are **hue-snapped** to the nearest token — nothing vivid
+  escapes the palette.
+- ANSI **backgrounds render as a 14% `color-mix` wash**, never a saturated fill, with
+  readable ink text — a diff's "removed" line is a faint band, not a block.
+
+Surface is the `--sunk` inset with DRAMS scrollbars; polling is 1.5s and sticks to the
+bottom when already scrolled there.
 
 ---
 
