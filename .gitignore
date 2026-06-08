@@ -1,5 +1,8 @@
 /target
-/.claude/
+/.claude/*
+!/.claude/agents/
+/.claude/agents/*
+!/.claude/agents/dex-designer.md
 .env
 .envrc
 
